@@ -1,0 +1,50 @@
+# Local environment for Flux (spec §16).
+#
+#   docker compose -f deploy/compose/docker-compose.yml --profile single up --build
+#
+# Profiles:
+#   single   one gateway on http://localhost:8080          (M1)
+#   cluster  three gateways behind nginx on :8080           (arrives in M4)
+#   bench    k6 load generator, run on demand               (arrives in M4)
+#
+# The backends publish no ports. From your machine the only way in is through the gateway,
+# which is the same isolation the k3s NetworkPolicy gives us on the server (spec N6).
+
+name: flux
+
+x-backend: &backend
+  build:
+    context: ../..
+    dockerfile: src/Flux.Backend/Dockerfile
+  image: flux-backend:local
+  restart: unless-stopped
+
+services:
+  payments:
+    <<: *backend
+    environment:
+      Backend__ServiceName: payments
+      Backend__LatencyMs: "5"
+
+  refunds:
+    <<: *backend
+    environment:
+      Backend__ServiceName: refunds
+      Backend__LatencyMs: "5"
+
+  gateway:
+    profiles: [single]
+    build:
+      context: ../..
+      dockerfile: src/Flux.Gateway/Dockerfile
+    image: flux-gateway:local
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # Compose's internal DNS resolves service names, so the gateway reaches "payments:8080".
+      ReverseProxy__Clusters__payments__Destinations__d1__Address: http://payments:8080
+      ReverseProxy__Clusters__refunds__Destinations__d1__Address: http://refunds:8080
+    depends_on:
+      - payments
+      - refunds
