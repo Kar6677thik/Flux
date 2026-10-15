@@ -34,7 +34,7 @@ public sealed class ApiKeyTests
     [InlineData("FLUX_devQuietShopimg7Ccuzt5fONTt77X0UcK82ZspFVHT")]    // scheme is case-sensitive
     [InlineData("flux_devQuietShopimg7Ccuzt5fONTt77X0UcK82ZspFVH!")]    // not base62
     [InlineData("flux_devQuietShopimg7Ccuzt5fONTt77X0UcK82ZspFVHTX")]   // one character too long
-    [InlineData("acme_devQuietShopimg7Ccuzt5fONTt77X0UcK82ZspFVH")]    // right length, another vendor's scheme
+    [InlineData("acme_devQuietShopimg7Ccuzt5fONTt77X0UcK82ZspFVHT")]   // right length, another vendor's scheme
     public void Malformed_keys_are_rejected_without_any_lookup(string key)
     {
         Assert.False(ApiKey.IsWellFormed(key));
