@@ -3,31 +3,57 @@
 #   docker compose -f deploy/compose/docker-compose.yml --profile single up --build
 #
 # Profiles:
-#   single   one gateway on http://localhost:8080          (M1)
+#   single   one gateway on http://localhost:8080          (M1; PostgreSQL since M2)
 #   cluster  three gateways behind nginx on :8080           (arrives in M4)
 #   bench    k6 load generator, run on demand               (arrives in M4)
 #
 # The backends publish no ports. From your machine the only way in is through the gateway,
 # which is the same isolation the k3s NetworkPolicy gives us on the server (spec N6).
+# PostgreSQL is the exception: published on 127.0.0.1:5433 only, so `dotnet run` from the IDE can use
+# it. 5433 rather than 5432 so it never collides with a PostgreSQL installed natively on the laptop.
+#
+# Every credential in this file is a local-only dev value and is public on purpose. Real secrets
+# never live in the repo (spec §17).
 
 name: flux
 
+# One image, two services (ADR-0007). Only payments builds it: if both did, two parallel builds
+# would race to export the same tag and one would fail with "already exists".
 x-backend: &backend
-  build:
-    context: ../..
-    dockerfile: src/Flux.Backend/Dockerfile
   image: flux-backend:local
   restart: unless-stopped
 
 services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: flux
+      POSTGRES_USER: flux
+      POSTGRES_PASSWORD: flux-local-dev
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # "Container started" is not "database accepting connections"; the gateway waits for this.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flux -d flux"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
   payments:
     <<: *backend
+    build:
+      context: ../..
+      dockerfile: src/Flux.Backend/Dockerfile
     environment:
       Backend__ServiceName: payments
       Backend__LatencyMs: "5"
 
   refunds:
     <<: *backend
+    pull_policy: never   # built locally by payments; there's nothing to pull
     environment:
       Backend__ServiceName: refunds
       Backend__LatencyMs: "5"
@@ -42,9 +68,20 @@ services:
     ports:
       - "8080:8080"
     environment:
+      # Development turns on migrate-on-startup, the demo merchants and the dev admin token
+      # (appsettings.Development.json). Production would refuse to seed the public dev keys.
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Postgres: Host=postgres;Database=flux;Username=flux;Password=flux-local-dev
       # Compose's internal DNS resolves service names, so the gateway reaches "payments:8080".
       ReverseProxy__Clusters__payments__Destinations__d1__Address: http://payments:8080
       ReverseProxy__Clusters__refunds__Destinations__d1__Address: http://refunds:8080
     depends_on:
-      - payments
-      - refunds
+      postgres:
+        condition: service_healthy
+      payments:
+        condition: service_started
+      refunds:
+        condition: service_started
+
+volumes:
+  pgdata:

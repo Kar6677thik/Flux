@@ -27,3 +27,12 @@ public static class FluxProblems
         return http.Response.WriteAsJsonAsync(problem, options: null, contentType: "application/problem+json");
     }
 }
+
+/// <summary>The same contract as an <see cref="IResult"/>, for endpoints that return results.</summary>
+public sealed record FluxProblem(int Status, string Code, string Title, string Detail) : IResult
+{
+    public Task ExecuteAsync(HttpContext http) => FluxProblems.WriteAsync(http, Status, Code, Title, Detail);
+
+    public static FluxProblem InvalidRequest(string detail) =>
+        new(StatusCodes.Status400BadRequest, "invalid_request", "Invalid request", detail);
+}

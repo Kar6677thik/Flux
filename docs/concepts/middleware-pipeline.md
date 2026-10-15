@@ -16,9 +16,11 @@ A middleware is a function `(HttpContext, next) → Task`. It can:
 3. look at or change the response on the way back up.
 
 ```
-request ─▶ CorrelationId ─▶ StripFluxHeaders ─▶ [Auth M2] ─▶ [RateLimit M3] ─▶ endpoint / YARP
-response ◀────────────────────────────────────────────────────────────────────────────┘
+request ─▶ ExceptionHandler ─▶ CorrelationId ─▶ StripFluxHeaders ─▶ routing ─┬─▶ /healthz, /readyz, /admin/*
+                                                                             ├─▶ YARP route: Auth (M2) ─▶ [RateLimit M3] ─▶ UpstreamError ─▶ forward
+                                                                             └─▶ fallback 404
 ```
+*Updated in M2:* auth lives **inside YARP's own pipeline** (`MapReverseProxy(proxy => …)`), not in the main one. It therefore runs only after a public route has matched (spec §5: route match is step 3, auth step 4), and gateway endpoints never ask for a merchant key.
 
 This is the Chain of Responsibility pattern, built into the framework.
 
@@ -27,9 +29,10 @@ This is the Chain of Responsibility pattern, built into the framework.
 |----------|-----------|----------|
 | 1 | `CorrelationIdMiddleware` | Everything after it, including error responses, needs the request id. |
 | 2 | `StripFluxHeadersMiddleware` | Must run **before** anything trusts `X-Flux-*`. If auth ran first and then something read a client-supplied `X-Flux-Merchant-Id`… game over. |
-| 3 | Auth (M2) | Must know *who* before deciding *how much*. |
-| 4 | Rate limit (M3) | Needs the merchant from auth. It comes before the proxy, because a rejected request must never cost a backend anything. |
-| 5 | Endpoints: `/healthz`, `/readyz`, YARP, fallback | The actual work. |
+| 0 | `UseExceptionHandler` (M2) | Outermost, so an exception anywhere below becomes a `500 internal_error` Problem Details response, never a stack trace. |
+| 3 | Auth (M2), in the YARP pipeline | Must know *who* before deciding *how much*. Placed after route matching, so `/v1/nope` is a `404`, not a `401`. |
+| 4 | Rate limit (M3), in the YARP pipeline | Needs the merchant from auth. It comes before forwarding, because a rejected request must never cost a backend anything. |
+| 5 | Endpoints: `/healthz`, `/readyz`, `/admin/*`, YARP forward, fallback | The actual work. `/admin/*` uses an *endpoint filter* for its token check. |
 
 ## Alternatives
 - **MVC action filters**: per-controller, so they don't apply to YARP's routes.
@@ -53,4 +56,4 @@ This is the Chain of Responsibility pattern, built into the framework.
 Every log line carries `requestId`. In JSON logs (non-Development) that's a field you can filter on.
 
 ## Related
-[reverse-proxy](reverse-proxy.md) · later: api-key-authentication (M2), token-bucket (M3)
+[reverse-proxy](reverse-proxy.md) · [api-key-authentication](api-key-authentication.md) · later: token-bucket (M3)

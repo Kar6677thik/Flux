@@ -179,6 +179,15 @@ Every error uses **RFC 9457 Problem Details** (`Content-Type: application/proble
 | 503 | `rate_limiter_unavailable` | Redis unavailable on a fail-closed route (§9.5) |
 | 504 | `upstream_timeout` | Backend took longer than 10 s |
 
+*Added in M2* (these situations weren't covered above):
+
+| Status | `code` | When |
+|--------|--------|------|
+| 401 | `invalid_admin_token` | Admin endpoint called without a valid `X-Admin-Token` |
+| 404 | `merchant_not_found` / `key_not_found` | Admin API: no merchant or key with that id |
+| 500 | `internal_error` | An unhandled bug in the gateway (never includes a stack trace) |
+| 503 | `auth_unavailable` | PostgreSQL unreachable and the key isn't cached. `Retry-After: 5`. See [ADR-0008](adr/0008-auth-when-postgres-is-down.md) |
+
 Error responses never contain stack traces, API keys or internal hostnames.
 
 ## 8. Authentication design
@@ -192,6 +201,7 @@ key → SHA-256 → in-memory cache (TTL 60 s) → hit?  → (merchant, plan, st
 
 - **Positive cache, TTL 60 s.** The database is not touched on the hot path. Trade-off: revoking a key, suspending a merchant or changing a plan takes up to 60 s to reach every gateway instance. We accept and document that delay.
 - **Negative cache, TTL 10 s.** Unknown keys are cached too. Otherwise a flood of random keys would turn into a flood of database queries (*cache penetration*, Field Guide §12.12).
+  - *Clarified in M2:* this protects against the **same** bad key repeated, not against many *different* random keys, each of which is a first-time miss. The negative cache is capped (`ApiKeys__MaxCacheEntries`) so that such a flood can't exhaust memory either. See the [caching note](concepts/caching-and-negative-caching.md).
 - **Plans and limits** are loaded into memory at startup and refreshed every 60 s.
 - **Comparison safety.** We look keys up by hash through a unique index, so there is no character-by-character comparison of secrets. The admin token *is* compared directly, so it uses `CryptographicOperations.FixedTimeEquals`.
 - **Logging.** Only the key prefix is ever logged.
@@ -353,6 +363,9 @@ Settings use ASP.NET Core's normal configuration (`appsettings.json`), overridde
 | `RateLimiting__FailurePolicy__refunds` | `FailClosed` | Per route group |
 | `ApiKeys__CacheTtlSeconds` | `60` | |
 | `ApiKeys__NegativeCacheTtlSeconds` | `10` | |
+| `ApiKeys__MaxCacheEntries` | `100000` | Cap on negative-cache entries (added in M2) |
+| `Database__MigrateOnStartup` | `false` | `true` in Development. Production uses the migration Job (§17) (added in M2) |
+| `Database__SeedDevData` | `false` | `true` in Development. The gateway refuses to start if it's `true` elsewhere (added in M2) |
 | `Admin__Token` | — | Secret. If missing, the admin API is disabled. |
 | `ReverseProxy__Clusters__payments__Destinations__d1__Address` | — | YARP upstream address |
 | `ReverseProxy__Clusters__refunds__Destinations__d1__Address` | — | YARP upstream address |
@@ -449,7 +462,7 @@ flowchart LR
 
 **One-time steps only you can do** (we need sudo or account access; listed now so they're not a surprise):
 
-1. **Free disk on Megatron.** `/` is 83% full. Kubelet's default image garbage collection starts at 85% and eviction at 85–90%, which could evict pods, **including Slate's**. Aim for ≥ 30% free before M7.
+1. ✅ **Free disk on Megatron.** *Done 2026-10-15: `/` is now 59% used (51 GB free).* It was 83% full. Kubelet's default image garbage collection starts at 85% and eviction at 85–90%, which could evict pods, **including Slate's**. Aim for ≥ 30% free before M7.
 2. **Add GitHub secrets to the Flux repo:**
    - `TS_OAUTH_CLIENT_ID` and `TS_OAUTH_SECRET` (Slate's `tag:ci` client can be reused)
    - `HOME_SERVER_HOST`, `HOME_SERVER_USER`, `HOME_SERVER_KNOWN_HOSTS`
@@ -471,7 +484,7 @@ Flux/
 │   └── Flux.Backend/             # fake payments/refunds service
 ├── tests/
 │   ├── Flux.Backend.Tests/
-│   ├── Flux.Gateway.UnitTests/       # from M3
+│   ├── Flux.Gateway.UnitTests/       # from M2 (key format, cache TTLs)
 │   └── Flux.Gateway.IntegrationTests/
 ├── deploy/
 │   ├── compose/                  # docker-compose.yml, nginx.conf
@@ -535,7 +548,7 @@ Each milestone is a branch (`m<N>-<slug>`) and a pull request into `main`. Nothi
 | StackExchange.Redis waits 5 s by default when Redis is down | This is exactly what E3 shows. M5 sets timeouts to 50 ms. |
 | Redis truncates Lua numbers to integers | The script returns integer milliseconds (§9.4). |
 | Load generator and system share CPUs | Cap k6's CPUs; note it in reports; compare within one run. |
-| The server disk is 83% full → kubelet eviction | Free disk before M7 (§17, step 1). |
+| ~~The server disk is 83% full → kubelet eviction~~ | ✅ Freed to 59% used on 2026-10-15 (§17, step 1). Recheck before M7. |
 | Public repo | No secrets in git. Dev keys are refused in Production. Secret scanning is enabled in CI. |
 | Plan or key changes take up to 60 s to apply | Documented trade-off (§8). The admin API states it. |
 
