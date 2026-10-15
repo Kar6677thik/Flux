@@ -163,7 +163,7 @@ Every error uses **RFC 9457 Problem Details** (`Content-Type: application/proble
   "status": 429,
   "detail": "Merchant plan 'free' allows 10 requests/s on route group 'payments'.",
   "code": "rate_limit_exceeded",
-  "requestId": "0HN7Q2KJ4F3TB:00000001"
+  "requestId": "4bf92f3577b34da6a3ce929d0e0e4736"
 }
 ```
 
@@ -378,7 +378,7 @@ These are **targets to verify, not results.** Reports will state actual numbers 
 
 | Layer | Tooling | Examples |
 |-------|---------|----------|
-| Unit | xUnit + `FakeTimeProvider` | Token-bucket maths at exact instants; the fixed-window boundary; header values; key generation and hashing; route mapping |
+| Unit | xUnit v3 (on Microsoft.Testing.Platform) + `FakeTimeProvider` | Token-bucket maths at exact instants; the fixed-window boundary; header values; key generation and hashing; route mapping |
 | Integration | xUnit + Testcontainers (real PostgreSQL and Redis) + `WebApplicationFactory` | Full request path; 401/403/429 contract; Lua script correctness; 500 parallel requests against Redis allow **exactly** `B`; Redis container stopped → payments degrade, refunds `503` |
 | Contract | Integration tests that assert headers and Problem Details bodies | Every row of the §7.4 table |
 | Load / experiments | k6 (Docker image) | §15 |
@@ -465,12 +465,13 @@ flowchart LR
 Flux/
 ├── README.md                     # what Flux is, architecture diagram, how to run, results
 ├── CLAUDE.md                     # conventions for AI-assisted sessions
-├── Flux.slnx
+├── Flux.slnx, global.json, Directory.Build.props, Directory.Packages.props
 ├── src/
 │   ├── Flux.Gateway/             # YARP + auth + rate limiting + admin + metrics
 │   └── Flux.Backend/             # fake payments/refunds service
 ├── tests/
-│   ├── Flux.Gateway.UnitTests/
+│   ├── Flux.Backend.Tests/
+│   ├── Flux.Gateway.UnitTests/       # from M3
 │   └── Flux.Gateway.IntegrationTests/
 ├── deploy/
 │   ├── compose/                  # docker-compose.yml, nginx.conf
@@ -542,7 +543,7 @@ Each milestone is a branch (`m<N>-<slug>`) and a pull request into `main`. Nothi
 
 | Item | Decided in |
 |------|-----------|
-| Exact NuGet and container image versions (pinned) | M1 |
+| ~~Exact NuGet and container image versions~~ | ✅ M1: `Directory.Packages.props` (YARP 2.3.0, xUnit v3 4.0.2, Mvc.Testing 10.0.13); images `dotnet/sdk:10.0` / `aspnet:10.0`; deployments pin by git SHA (M7) |
 | Metrics library: OpenTelemetry Prometheus exporter or `prometheus-net` | M3 |
 | Free NodePort and final Tailscale Serve port | M7 |
 | Whether GHCR packages need to be made public manually | M7 |

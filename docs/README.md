@@ -21,9 +21,9 @@ These docs record **what** was built, **why** it was built that way, and **when*
 
 | Journal | Milestone | Status |
 |---------|-----------|--------|
-| [00 — Specification](journal/00-specification.md) | M0 | ✅ Done, awaiting your review |
-| 01 — Skeleton | M1 | Next |
-| 02 — Tenancy & auth | M2 | |
+| [00 — Specification](journal/00-specification.md) | M0 | ✅ Done |
+| [01 — Skeleton](journal/01-skeleton.md) | M1 | ✅ Done, in review |
+| 02 — Tenancy & auth | M2 | Next |
 | 03 — In-memory token bucket | M3 | |
 | 04 — Break it | M4 | |
 | 05 — Redis + resilience | M5 | |
@@ -39,3 +39,10 @@ These docs record **what** was built, **why** it was built that way, and **when*
 | [0005](adr/0005-per-route-failure-policy.md) | Payments fail open (with local fallback), refunds fail closed |
 | [0006](adr/0006-deploy-k3s-actions-tailscale.md) | k3s via GitHub Actions + Tailscale + narrow sudo helper; tailnet only |
 | [0007](adr/0007-one-fake-backend-image.md) | One fake-backend codebase run as two services |
+
+| Concept note | Milestone |
+|--------------|-----------|
+| [Reverse proxy (and YARP)](concepts/reverse-proxy.md) | M1 |
+| [The middleware pipeline](concepts/middleware-pipeline.md) | M1 |
+| [Containers, Dockerfiles, Compose](concepts/docker-compose.md) | M1 |
+| [CI with GitHub Actions](concepts/github-actions-ci.md) | M1 |

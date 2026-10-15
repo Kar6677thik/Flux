@@ -1,0 +1,65 @@
+# Continuous integration (Field Guide §22.1): every push and pull request is built and tested on a
+# fresh, disposable Ubuntu machine, so "works on my laptop" can't sneak into main.
+# M7 extends this with: push images to GHCR (main only) -> deploy to Megatron.
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+
+# A newer push to the same branch makes older runs pointless; cancel them to save minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege (Field Guide §22.24): this workflow only needs to read the code.
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json      # same SDK as local development
+          cache: true
+          cache-dependency-path: '**/*.csproj'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build (warnings are errors)
+        run: dotnet build --no-restore -c Release
+
+      - name: Test
+        run: dotnet test --no-build -c Release
+
+  images:
+    name: Build container images
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        service: [Gateway, Backend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Proves the Dockerfiles still build. Nothing is pushed until M7.
+      - name: Build Flux.${{ matrix.service }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: src/Flux.${{ matrix.service }}/Dockerfile
+          push: false
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
