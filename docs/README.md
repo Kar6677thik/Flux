@@ -22,9 +22,9 @@ These docs record **what** was built, **why** it was built that way, and **when*
 | Journal | Milestone | Status |
 |---------|-----------|--------|
 | [00 — Specification](journal/00-specification.md) | M0 | ✅ Done |
-| [01 — Skeleton](journal/01-skeleton.md) | M1 | ✅ Done, in review |
-| 02 — Tenancy & auth | M2 | Next |
-| 03 — In-memory token bucket | M3 | |
+| [01 — Skeleton](journal/01-skeleton.md) | M1 | ✅ Done |
+| [02 — Tenancy & auth](journal/02-tenancy-auth.md) | M2 | ✅ Done, in review |
+| 03 — In-memory token bucket | M3 | Next |
 | 04 — Break it | M4 | |
 | 05 — Redis + resilience | M5 | |
 | 06 — Prove it | M6 | |
@@ -39,6 +39,7 @@ These docs record **what** was built, **why** it was built that way, and **when*
 | [0005](adr/0005-per-route-failure-policy.md) | Payments fail open (with local fallback), refunds fail closed |
 | [0006](adr/0006-deploy-k3s-actions-tailscale.md) | k3s via GitHub Actions + Tailscale + narrow sudo helper; tailnet only |
 | [0007](adr/0007-one-fake-backend-image.md) | One fake-backend codebase run as two services |
+| [0008](adr/0008-auth-when-postgres-is-down.md) | PostgreSQL down → cached keys keep working, uncached keys get `503 auth_unavailable` |
 
 | Concept note | Milestone |
 |--------------|-----------|
@@ -46,3 +47,8 @@ These docs record **what** was built, **why** it was built that way, and **when*
 | [The middleware pipeline](concepts/middleware-pipeline.md) | M1 |
 | [Containers, Dockerfiles, Compose](concepts/docker-compose.md) | M1 |
 | [CI with GitHub Actions](concepts/github-actions-ci.md) | M1 |
+| [API-key authentication](concepts/api-key-authentication.md) | M2 |
+| [Multi-tenancy](concepts/multi-tenancy.md) | M2 |
+| [Caching and negative caching](concepts/caching-and-negative-caching.md) | M2 |
+| [EF Core and schema migrations](concepts/ef-core-migrations.md) | M2 |
+| [Problem Details and the error contract](concepts/problem-details.md) | M2 |
