@@ -5,6 +5,7 @@ Flux is a **learning project**. The owner learns from the docs as much as from t
 ## Source of truth
 - `docs/spec.md` is the agreed specification. To change a decision, add a new ADR in `docs/adr/` that supersedes the old one. Don't silently edit an accepted ADR.
 - Work happens in milestones M1–M7 (spec §19). Each milestone gets its own branch `m<N>-<slug>` and a PR into `main`. Never push or merge without the owner's OK.
+- Commits and PRs are authored by the owner only: no `Co-Authored-By` trailers, no "Generated with Claude Code" footers.
 
 ## Documentation is part of "done"
 Every milestone must add or update:
@@ -24,3 +25,8 @@ Code comments explain *why*, not *what*. Keep them sparse; the depth belongs in 
 - .NET 10, nullable enabled, warnings as errors.
 - Tests: xUnit + Testcontainers. Never mock PostgreSQL or Redis. Never sleep on the wall clock; use `FakeTimeProvider`.
 - Never log full API keys; log `key_prefix` only. No secrets in the repo (it is public).
+
+## Commands
+- Build: `dotnet build -c Release` (warnings fail the build). Test: `dotnet test` (xUnit v3 on Microsoft.Testing.Platform, opted in via `global.json`).
+- Run locally: `dotnet run --project src/Flux.Backend --launch-profile payments|refunds` (ports 5201/5202) and `dotnet run --project src/Flux.Gateway` (port 5100).
+- Containers: `docker compose -f deploy/compose/docker-compose.yml --profile single up --build` (gateway on :8080).

@@ -1,0 +1,10 @@
+# Store text with LF in git; check out with the platform's default unless pinned below.
+* text=auto
+
+# Files that run inside Linux containers / on the server must stay LF everywhere.
+*.sh   text eol=lf
+*.lua  text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.conf text eol=lf
+Dockerfile text eol=lf

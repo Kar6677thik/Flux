@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Flux.Backend/Flux.Backend.csproj" />
+    <Project Path="src/Flux.Gateway/Flux.Gateway.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Flux.Backend.Tests/Flux.Backend.Tests.csproj" />
+    <Project Path="tests/Flux.Gateway.IntegrationTests/Flux.Gateway.IntegrationTests.csproj" />
+  </Folder>
+</Solution>
