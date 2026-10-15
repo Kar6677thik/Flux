@@ -24,8 +24,8 @@ These docs record **what** was built, **why** it was built that way, and **when*
 | [00 — Specification](journal/00-specification.md) | M0 | ✅ Done |
 | [01 — Skeleton](journal/01-skeleton.md) | M1 | ✅ Done |
 | [02 — Tenancy & auth](journal/02-tenancy-auth.md) | M2 | ✅ Done, in review |
-| 03 — In-memory token bucket | M3 | Next |
-| 04 — Break it | M4 | |
+| [03 — In-memory token bucket](journal/03-token-bucket.md) | M3 | ✅ Done, in review |
+| 04 — Break it | M4 | Next |
 | 05 — Redis + resilience | M5 | |
 | 06 — Prove it | M6 | |
 | 07 — Deploy | M7 | |
@@ -40,6 +40,7 @@ These docs record **what** was built, **why** it was built that way, and **when*
 | [0006](adr/0006-deploy-k3s-actions-tailscale.md) | k3s via GitHub Actions + Tailscale + narrow sudo helper; tailnet only |
 | [0007](adr/0007-one-fake-backend-image.md) | One fake-backend codebase run as two services |
 | [0008](adr/0008-auth-when-postgres-is-down.md) | PostgreSQL down → cached keys keep working, uncached keys get `503 auth_unavailable` |
+| [0009](adr/0009-metrics-system-diagnostics-otel-prometheus.md) | Metrics: `System.Diagnostics.Metrics` + OpenTelemetry's Prometheus exporter |
 
 | Concept note | Milestone |
 |--------------|-----------|
@@ -52,3 +53,7 @@ These docs record **what** was built, **why** it was built that way, and **when*
 | [Caching and negative caching](concepts/caching-and-negative-caching.md) | M2 |
 | [EF Core and schema migrations](concepts/ef-core-migrations.md) | M2 |
 | [Problem Details and the error contract](concepts/problem-details.md) | M2 |
+| [The token bucket](concepts/token-bucket.md) | M3 |
+| [Rate-limit headers](concepts/rate-limit-headers.md) | M3 |
+| [Testing code that depends on time](concepts/testing-time.md) | M3 |
+| [Metrics and cardinality](concepts/metrics-and-cardinality.md) | M3 |

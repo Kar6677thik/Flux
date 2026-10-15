@@ -2,11 +2,14 @@ using Flux.Gateway.Admin;
 using Flux.Gateway.Auth;
 using Flux.Gateway.Data;
 using Flux.Gateway.Http;
+using Flux.Gateway.Observability;
 using Flux.Gateway.Proxy;
+using Flux.Gateway.RateLimiting;
 using Flux.Gateway.Tenancy;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using OpenTelemetry.Metrics;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,6 +27,7 @@ builder.Services.AddOptions<AdminOptions>().BindConfiguration(AdminOptions.Secti
     .Validate(o => o.IsValid, $"Admin:Token must be at least {AdminOptions.MinTokenLength} characters, or unset to disable the admin API.")
     .ValidateOnStart();
 builder.Services.AddOptions<DatabaseOptions>().BindConfiguration(DatabaseOptions.SectionName);
+builder.Services.AddOptions<RateLimitingOptions>().BindConfiguration(RateLimitingOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
 
 // By default minimal APIs throw on an unreadable body only in Development; elsewhere they answer
 // with a bare 400. Throwing everywhere sends both through the exception handler's Problem Details.
@@ -42,6 +46,19 @@ builder.Services.AddSingleton<ApiKeyAuthenticator>();
 builder.Services.AddSingleton<PlanCatalog>();
 builder.Services.AddHostedService<PlanRefreshService>();
 
+// Strategy (spec §9.1): the algorithm is chosen by config, and callers only see IRateLimiter.
+builder.Services.AddSingleton<InMemoryTokenBucket>();
+builder.Services.AddSingleton<IRateLimiter>(sp => sp.GetRequiredService<IOptions<RateLimitingOptions>>().Value.Algorithm switch
+{
+    InMemoryTokenBucket.Name => sp.GetRequiredService<InMemoryTokenBucket>(),
+    var other => throw new InvalidOperationException($"Unknown RateLimiting:Algorithm '{other}'."),
+});
+
+builder.Services.AddSingleton<FluxMetrics>();
+builder.Services.AddOpenTelemetry().WithMetrics(metrics => metrics
+    .AddMeter(FluxMetrics.MeterName)
+    .AddPrometheusExporter());
+
 var app = builder.Build();
 
 await DatabaseStartup.RunAsync(app);
@@ -53,8 +70,12 @@ app.UseExceptionHandler(error => error.Run(http =>
         ? FluxProblems.WriteAsync(http, bad.StatusCode, "invalid_request", "Invalid request", "The request body could not be read as JSON.")
         : FluxProblems.WriteAsync(http, StatusCodes.Status500InternalServerError, "internal_error", "Internal error",
             "Something went wrong in the gateway. Quote the requestId when reporting it.")));
+app.UseMiddleware<RequestTelemetryMiddleware>();
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseMiddleware<StripFluxHeadersMiddleware>();
+
+// Prometheus text format (spec §11.2). Like the health endpoints, it never needs a merchant key.
+app.MapPrometheusScrapingEndpoint("/metrics");
 
 // Liveness: is the process alive? Readiness: should it get traffic? Readiness waits for the plan
 // catalog, and deliberately nothing else (spec §11.2).
@@ -70,13 +91,20 @@ if (app.Services.GetRequiredService<IOptions<AdminOptions>>().Value.Enabled)
 // Only requests that matched a public route get here, so gateway endpoints never need a key.
 app.MapReverseProxy(proxy =>
 {
+    proxy.UseMiddleware<RouteGroupMiddleware>();
     proxy.UseMiddleware<ApiKeyAuthMiddleware>();
+    proxy.UseMiddleware<RateLimitMiddleware>();
     proxy.UseMiddleware<UpstreamErrorMiddleware>();
+    proxy.UseMiddleware<UpstreamTimingMiddleware>();
 });
 
 // Anything that matched neither a gateway endpoint nor a proxy route.
-app.MapFallback(http => FluxProblems.WriteAsync(http, StatusCodes.Status404NotFound, "route_not_found",
-    "Route not found", $"No route matches {http.Request.Method} {http.Request.Path}."));
+app.MapFallback(http =>
+{
+    http.SetOutcome(Outcomes.NotFound);
+    return FluxProblems.WriteAsync(http, StatusCodes.Status404NotFound, "route_not_found",
+        "Route not found", $"No route matches {http.Request.Method} {http.Request.Path}.");
+});
 
 app.Run();
 

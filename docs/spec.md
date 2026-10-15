@@ -338,13 +338,14 @@ Every admin endpoint requires the `X-Admin-Token` header (compared in constant t
 - **`GET /readyz`** (readiness): `200` once plans have loaded from PostgreSQL at least once.
   - Readiness deliberately **does not check Redis**. If it did, a Redis outage would mark every gateway unready, and the load balancer would remove them all, a total outage. That would defeat the fail-open policy.
 - **`GET /metrics`** (Prometheus text format):
-  - `flux_requests_total{route_group, outcome}`, where outcome is one of `allowed`, `limited`, `unauthorized`, `forbidden`, `limiter_unavailable`, `not_found`
+  - `flux_requests_total{route_group, outcome}`, where outcome is one of `allowed`, `limited`, `unauthorized`, `forbidden`, `limiter_unavailable`, `not_found`, and (added in M3, for ADR-0008) `auth_unavailable`. `route_group` is `none` for `not_found`.
   - `flux_gateway_overhead_seconds` (histogram): total time minus time spent waiting on the upstream
   - `flux_ratelimiter_duration_seconds{algorithm}` (histogram)
   - `flux_ratelimiter_fallback_total{route_group, policy}`
   - `flux_ratelimiter_circuit_state` (gauge)
   - **No `merchant_id` label.** Every distinct label value creates a new time series, which at Razorpay's scale would mean millions of series (*cardinality explosion*). Per-merchant latency in experiments is measured on the client side, with k6 tags.
 - **`Server-Timing` response header:** `gw;dur=0.84, upstream;dur=5.21` (milliseconds). This lets k6 record gateway overhead for each individual request.
+  - *Clarified in M3:* both values are measured up to the moment the response starts. `upstream` is the wait for the backend's response to begin; responses the gateway answers itself carry only `gw`. Every series also carries the exporter's `otel_scope_name="Flux.Gateway"` label.
 - **Logs:** structured JSON to stdout, including `requestId`, `merchantId`, `routeGroup`, `outcome` and `keyPrefix`. Logs never contain full keys or request bodies.
 
 ## 12. Configuration
@@ -557,7 +558,7 @@ Each milestone is a branch (`m<N>-<slug>`) and a pull request into `main`. Nothi
 | Item | Decided in |
 |------|-----------|
 | ~~Exact NuGet and container image versions~~ | ✅ M1: `Directory.Packages.props` (YARP 2.3.0, xUnit v3 4.0.2, Mvc.Testing 10.0.13); images `dotnet/sdk:10.0` / `aspnet:10.0`; deployments pin by git SHA (M7) |
-| Metrics library: OpenTelemetry Prometheus exporter or `prometheus-net` | M3 |
+| ~~Metrics library: OpenTelemetry Prometheus exporter or `prometheus-net`~~ | ✅ M3: `System.Diagnostics.Metrics` instruments + the OpenTelemetry Prometheus exporter, pinned beta ([ADR-0009](adr/0009-metrics-system-diagnostics-otel-prometheus.md)) |
 | Free NodePort and final Tailscale Serve port | M7 |
 | Whether GHCR packages need to be made public manually | M7 |
 | Whether to rerun the experiments on Megatron | After M6, your call |

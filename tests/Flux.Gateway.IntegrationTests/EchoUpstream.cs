@@ -13,13 +13,23 @@ public sealed class EchoUpstream : IAsyncLifetime
 {
     private WebApplication? _app;
 
+    private int _requestCount;
+
     public string Address { get; private set; } = "";
+
+    /// <summary>Requests received so far, so a test can prove the gateway did *not* forward something.</summary>
+    public int RequestCount => Volatile.Read(ref _requestCount);
 
     public async ValueTask InitializeAsync()
     {
         var builder = WebApplication.CreateSlimBuilder();
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         _app = builder.Build();
+        _app.Use((http, next) =>
+        {
+            Interlocked.Increment(ref _requestCount);
+            return next(http);
+        });
 
         _app.MapGet("/payments/slow", async (CancellationToken ct) =>
         {
