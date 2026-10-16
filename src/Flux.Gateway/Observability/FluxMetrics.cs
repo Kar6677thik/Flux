@@ -1,4 +1,6 @@
 using System.Diagnostics.Metrics;
+using Flux.Gateway.RateLimiting;
+using Polly.CircuitBreaker;
 
 namespace Flux.Gateway.Observability;
 
@@ -20,10 +22,12 @@ public sealed class FluxMetrics
     private readonly Counter<long> _requests;
     private readonly Histogram<double> _overhead;
     private readonly Histogram<double> _limiterDuration;
+    private readonly Counter<long> _fallbacks;
+    private readonly Meter _meter;
 
     public FluxMetrics(IMeterFactory meterFactory)
     {
-        var meter = meterFactory.Create(MeterName);
+        var meter = _meter = meterFactory.Create(MeterName);
         var advice = new InstrumentAdvice<double> { HistogramBucketBoundaries = LatencyBuckets };
 
         _requests = meter.CreateCounter<long>("flux.requests",
@@ -32,7 +36,17 @@ public sealed class FluxMetrics
             description: "Time spent in the gateway itself: until the response starts, minus waiting on the upstream.", advice: advice);
         _limiterDuration = meter.CreateHistogram("flux.ratelimiter.duration", unit: "s",
             description: "Time taken by one rate-limiter decision.", advice: advice);
+        _fallbacks = meter.CreateCounter<long>("flux.ratelimiter.fallback",
+            description: "Decisions made without Redis, by route group and failure policy.");
     }
+
+    public void LimiterFallback(string routeGroup, FailurePolicy policy) =>
+        _fallbacks.Add(1, new("route_group", routeGroup), new("policy", policy == FailurePolicy.FailOpen ? "fail_open" : "fail_closed"));
+
+    /// <summary>0 = closed (healthy), 1 = open (Redis skipped), 2 = half-open (one trial call), 3 = isolated.</summary>
+    public void ObserveCircuitState(Func<CircuitState> state) =>
+        _meter.CreateObservableGauge("flux.ratelimiter.circuit_state", () => (int)state(),
+            description: "Circuit breaker in front of Redis: 0 closed, 1 open, 2 half-open, 3 isolated.");
 
     public void RequestCompleted(string routeGroup, string outcome) =>
         _requests.Add(1, new("route_group", routeGroup), new("outcome", outcome));

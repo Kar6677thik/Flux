@@ -13,6 +13,9 @@
     <!-- Npgsql's provider asks for EF Core >= 10.0.4; pin the latest patch so every project
          (and the design-time tooling) loads the same EF Core assemblies. -->
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.13" />
+    <PackageVersion Include="StackExchange.Redis" Version="3.4.5" />
+    <PackageVersion Include="Polly.Core" Version="8.8.0" />
+    <PackageVersion Include="Testcontainers.Redis" Version="4.16.0" />
     <!-- Metrics export (ADR-0009). The Prometheus exporter is still a beta; pinned exactly. -->
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.19.1" />
     <PackageVersion Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.19.1-beta.1" />

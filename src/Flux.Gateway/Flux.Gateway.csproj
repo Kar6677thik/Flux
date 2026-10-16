@@ -8,10 +8,17 @@
     <PackageReference Include="Yarp.ReverseProxy" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="EFCore.NamingConventions" />
+    <PackageReference Include="StackExchange.Redis" />
+    <PackageReference Include="Polly.Core" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" />
     <!-- Design-time only (dotnet ef migrations add): never shipped in the published app. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Kept as a real .lua file so it reads (and diffs) as Lua, not as a C# string. -->
+    <EmbeddedResource Include="RateLimiting/token_bucket.lua" />
   </ItemGroup>
 
   <ItemGroup>

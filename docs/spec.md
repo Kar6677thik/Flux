@@ -276,6 +276,7 @@ The full reasoning is in [ADR-0005](adr/0005-per-route-failure-policy.md).
 - Each Redis call has a **50 ms timeout**. The StackExchange.Redis default is 5 s, and with that default an outage would add 5 s to every request. Experiment E3 demonstrates this.
 - A **circuit breaker** opens when ≥50% of at least 20 calls fail within 10 s. While it is open, the gateway uses the fallback immediately, without waiting for a timeout. After 5 s it lets one trial call through.
 - The gateway must **start successfully even if Redis is down** (`AbortOnConnectFail = false`).
+- *Added in M5 ([ADR-0010](adr/0010-resilience-polly-fail-fast-client.md)):* the client **fails fast** while disconnected instead of queueing commands (E3 measured the queue: 5.5 s hangs, then a replay burst). A cancellation the caller didn't request counts as a Redis failure (found by P4).
 
 ## 10. Data model (PostgreSQL)
 
@@ -360,6 +361,7 @@ Settings use ASP.NET Core's normal configuration (`appsettings.json`), overridde
 | `RateLimiting__FixedWindow__WindowSeconds` | `10` | Experiment E2 only. Must be 1–3600 (validated since M4) |
 | `RateLimiting__Redis__TimeoutMs` | `50` | Per-call timeout |
 | `RateLimiting__Fallback__AssumedInstances` | `3` | Divides limits in fail-open mode |
+| `RateLimiting__Redis__UseResilience` | `true` | Added in M5. `false` only for experiment E3 (no timeout/breaker/policy; the client's default queueing) |
 | `RateLimiting__FailurePolicy__payments` | `FailOpen` | Per route group |
 | `RateLimiting__FailurePolicy__refunds` | `FailClosed` | Per route group |
 | `ApiKeys__CacheTtlSeconds` | `60` | |
@@ -384,7 +386,7 @@ These are **targets to verify, not results.** Reports will state actual numbers 
 | N1 | Gateway overhead ≤ 2 ms at p50 and ≤ 10 ms at p99, at 500 req/s on the local machine, with the Redis limiter | P3 |
 | N2 | With 3 instances and Redis, a merchant's allowed count over 60 s is within ±5% of `B + r × 60` | P1 |
 | N3 | The quiet merchant's p95 latency rises by ≤ 10% while the noisy merchant sends 100× its limit | P2 |
-| N4 | During a Redis outage, no request waits more than ~50 ms extra. Payments keep flowing in degraded mode; refunds get a `503` in < 100 ms. Recovery is automatic once Redis returns. | P4 |
+| N4 | During a Redis outage, no request waits more than ~50 ms extra. Payments keep flowing in degraded mode; refunds get a `503` in < 100 ms. Recovery is automatic once Redis returns. | P4 (✅ measured in M5: met; under a silent `pause` outage the tail of the first ~2 s reached 60–75 ms over normal before the breaker opened) |
 | N5 | On the server, the whole `flux` namespace stays within 1.5 GiB of memory limits and 2 GiB of disk | M7 |
 | N6 | No plaintext API key stored or logged. Clients cannot spoof `X-Flux-*` headers. Backends are unreachable from outside the cluster or Compose network. | Tests + M7 |
 

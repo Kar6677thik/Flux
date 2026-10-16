@@ -1,4 +1,5 @@
 using Flux.Gateway.Data;
+using Flux.Gateway.Tenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Time.Testing;
 using Testcontainers.PostgreSql;
@@ -26,7 +27,23 @@ public sealed class PostgresFixture : IAsyncLifetime
         await using var db = CreateDbContext();
         await db.Database.MigrateAsync();
         await DevSeed.ApplyAsync(db, new FakeTimeProvider(), CancellationToken.None);
+
+        // Redis's clock can't be faked, so tests that count admissions against Redis use a plan
+        // that refills so slowly that real time passing during the test can't add a token.
+        db.Plans.Add(new Plan
+        {
+            Id = SlowPlan, DisplayName = "Tests: slow refill",
+            RouteLimits =
+            [
+                new PlanRouteLimit { PlanId = SlowPlan, RouteGroup = RouteGroups.Payments, RefillPerSecond = 0.001m, BurstCapacity = 10 },
+                new PlanRouteLimit { PlanId = SlowPlan, RouteGroup = RouteGroups.Refunds, RefillPerSecond = 0.001m, BurstCapacity = 2 },
+            ],
+        });
+        await db.SaveChangesAsync();
     }
+
+    /// <summary>Burst 10 / 2 like "free", but refilling at 0.001/s: one token every ~17 minutes.</summary>
+    public const string SlowPlan = "test-slow";
 
     public FluxDbContext CreateDbContext() => new(new DbContextOptionsBuilder<FluxDbContext>()
         .UseNpgsql(ConnectionString)
