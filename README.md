@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/Kar6677thik/Flux/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Kar6677thik/Flux/actions/workflows/ci.yml)
 
-A multi-tenant API gateway and rate limiter in ASP.NET Core 10 and YARP. Each merchant is authenticated by API key and held to its plan's limit **per route**, through one atomic Redis Lua script shared by every gateway instance. When Redis fails, payments degrade gracefully and refunds fail closed. Inspired by Razorpay's Edge gateway. It's a learning project: Project 1 of *10 Engineering Projects from Real Company Problems*, documented end to end in [`docs/`](docs/README.md).
+A multi-tenant API gateway and rate limiter built on ASP.NET Core 10 and YARP. Every request is authenticated by API key and mapped to a merchant, whose plan sets a separate limit for each route group. Limits are enforced by a token bucket shared across all gateway instances through a single atomic Redis Lua script. If Redis becomes unavailable, payments continue under a reduced local limit and refunds fail closed.
 
-> **Status:** complete (M0–M7). Images are published to GHCR on every merge; Flux is deliberately not hosted anywhere ([ADR-0011](docs/adr/0011-no-home-server-deploy-publish-images.md)). Run it in two commands (below) or watch it work:
+Container images are published to GHCR on every merge to `main`.
 
 ![A 30-second terminal demo: an authenticated request with rate-limit headers; noisy-corp's burst of 25 refunds gets 2 allowed and 23 × 429; Redis is stopped, payments keep flowing with X-RateLimit-Degraded while refunds get 503; Redis returns and everything is normal again.](docs/images/demo.svg)
 
@@ -13,7 +13,7 @@ A multi-tenant API gateway and rate limiter in ASP.NET Core 10 and YARP. Each me
 ## Architecture
 ```mermaid
 flowchart LR
-    C["Client / k6"] -->|"Authorization: Bearer flux_..."| LB["nginx (local, L7)<br/>k8s Service (server)"]
+    C["Client / k6"] -->|"Authorization: Bearer flux_..."| LB["nginx<br/>(L7 load balancer)"]
     LB --> G1["Gateway #1"]
     LB --> G2["Gateway #2"]
     LB --> G3["Gateway #3"]
@@ -24,18 +24,25 @@ flowchart LR
 ```
 Each request: correlation id → strip client `X-Flux-*` headers → route group → API-key auth (cached) → rate limit (Redis, or the per-route failure policy) → forward → `X-RateLimit-*` + `Server-Timing` on the way back. Details: [spec §5](docs/spec.md).
 
-## Results (measured)
-All numbers were measured on one laptop (Intel Core Ultra 5 225H, Docker Desktop on WSL2, k6 capped at 2 CPUs). Each links to its report, with exact commands and every run.
+## Results
+Measured on a single machine (Intel Core Ultra 5 225H, Docker Desktop on WSL2, k6 limited to 2 CPUs). Each report includes the hypothesis, setup, exact commands and every run.
 
-| Claim | Measured | Target | Report |
-|-------|----------|--------|--------|
-| In-memory buckets across 3 instances let a merchant through at ~3× its limit | **2.99×** (1,822–1,825 allowed vs. a bound of 610), 3 runs | (break) | [E1](docs/reports/E1-per-instance-buckets.md) |
-| A fixed window allows a boundary burst | **200 of 200** in ~235 ms on a 10 req/s plan (token bucket: 10–12) | (break) | [E2](docs/reports/E2-fixed-window-boundary.md) |
-| Client defaults turn a Redis outage into an outage of everything | requests hang **~5.5 s**, then `500`; afterwards **138 + 30 false `429`s** from a replayed queue | (break) | [E3](docs/reports/E3-redis-outage-default-timeouts.md) |
-| **One shared Redis bucket enforces the limit across 3 gateways** | **608–609 of 610** (≤ 0.3% error), 3 runs | ±5% (N2) | [P1](docs/reports/P1-shared-redis-bucket.md) |
-| **A merchant flooding at 100× its limit doesn't slow a quiet one** | quiet merchant's p95 **no increase** (3 paired runs); flooder got exactly its 609; backend CPU unchanged at 2% | p95 ≤ +10% (N3) | [P2](docs/reports/P2-noisy-neighbour.md) |
-| **The gateway adds little latency** | **p50 0.30–0.71 ms, p99 1.08–1.57 ms** at 500 req/s with Redis, by two methods; the Redis check is ~86% of it | p50 ≤ 2 ms, p99 ≤ 10 ms (N1) | [P3](docs/reports/P3-gateway-overhead.md) |
-| **A Redis outage is survivable** | payments **100% served** (degraded) at normal latency; refunds `503` in **~1.1 ms** (p50); automatic recovery in **4.1–4.6 s** | N4 | [P4](docs/reports/P4-redis-outage-resilient.md) |
+**Baselines: the failure modes the design addresses**
+
+| Scenario | Result | Report |
+|----------|--------|--------|
+| In-memory limits across 3 instances | a merchant is admitted at **2.99×** its limit (1,822–1,825 vs. 610) | [E1](docs/reports/E1-per-instance-buckets.md) |
+| Fixed-window limiting | **200 of 200** requests admitted within ~235 ms across a window boundary, on a 10 req/s plan; a token bucket admits 10–12 | [E2](docs/reports/E2-fixed-window-boundary.md) |
+| Redis outage with default client settings | requests block for **~5.5 s** and fail with `500`; after recovery, a replayed command backlog produces **168 spurious `429`s** | [E3](docs/reports/E3-redis-outage-default-timeouts.md) |
+
+**Production configuration**
+
+| Property | Result | Target | Report |
+|----------|--------|--------|--------|
+| Limit accuracy across 3 instances | **608–609 of 610** admitted (≤ 0.3% error) | within ±5% | [P1](docs/reports/P1-shared-redis-bucket.md) |
+| Tenant isolation under a 100× flood | quiet merchant's p95 **unchanged**; flooding merchant held to exactly its quota; backend CPU unchanged | p95 ≤ +10% | [P2](docs/reports/P2-noisy-neighbour.md) |
+| Gateway overhead at 500 req/s | **p50 0.30–0.71 ms, p99 1.08–1.57 ms** (two independent methods) | p50 ≤ 2 ms, p99 ≤ 10 ms | [P3](docs/reports/P3-gateway-overhead.md) |
+| Redis outage | payments **100% served** in degraded mode at normal latency; refunds rejected with `503` in **~1.1 ms**; automatic recovery in **4.1–4.6 s** | ≤ ~50 ms added latency, refunds < 100 ms | [P4](docs/reports/P4-redis-outage-resilient.md) |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/limits-dark.svg">
@@ -52,9 +59,9 @@ All numbers were measured on one laptop (Intel Core Ultra 5 225H, Docker Desktop
   <img alt="Payments p99 latency per second, log scale. With client defaults, p99 jumps to about 6 seconds for the whole outage. With the resilient limiter it stays between 10 and 20 ms." src="docs/images/outage-latency-light.svg">
 </picture>
 
-<sub>Charts drawn by [`bench/make_charts.py`](bench/make_charts.py) from the experiments' raw k6 output; the table above is the same data in text form.</sub>
+<sub>Charts generated by [`bench/make_charts.py`](bench/make_charts.py) from the raw k6 output.</sub>
 
-Caveat, from P4: during a *silent* outage (Redis frozen, connections still open), the slowest requests in the ~2 s before the circuit breaker opened took 60–75 ms over normal, not the targeted ≤ 50 ms.
+**Known limitation:** when Redis stops responding without closing its connections, requests in the ~2 s before the circuit breaker opens take 60–75 ms longer than normal, slightly above the 50 ms target.
 
 ## Run it
 **Just Docker, nothing to build.** Uses the images CI publishes to GHCR:
@@ -75,7 +82,7 @@ dotnet build -c Release && dotnet test                       # 135 tests; integr
 docker compose -f deploy/compose/docker-compose.yml --profile single up --build -d
 curl -i localhost:8080/v1/payments/pay_1 -H "Authorization: Bearer flux_devQuietShopimg7Ccuzt5fONTt77X0UcK82ZspFVHT"
 ```
-The dev keys and admin token are public on purpose and exist only in Development; the gateway refuses to seed them anywhere else. Three gateways behind nginx: `--profile cluster`. The experiments are one command each: see [`bench/README.md`](bench/README.md).
+The API keys and admin token above are development-only values: they are seeded only when `ASPNETCORE_ENVIRONMENT=Development`, and the gateway refuses to start if seeding is enabled in any other environment. Use `--profile cluster` for three gateways behind nginx. Benchmark scripts and instructions are in [`bench/`](bench/README.md).
 
 ## What's inside
 - **Auth:** `flux_` + 43 base62 characters (32 random bytes). Stored as SHA-256 plus a 12-character prefix, shown once. Positive cache 60 s, negative cache 10 s ([ADR-0003](docs/adr/0003-api-keys-sha256-bearer.md)).
@@ -89,12 +96,8 @@ The dev keys and admin token are public on purpose and exist only in Development
 - **Observability:** `/metrics` (Prometheus, no per-merchant labels), `Server-Timing`, JSON logs carrying `requestId`/`merchantId`/`keyPrefix` and never full keys ([ADR-0009](docs/adr/0009-metrics-system-diagnostics-otel-prometheus.md)).
 - **Tests:** xUnit v3, Testcontainers (real PostgreSQL 17 and Redis 7.4, never mocked), `FakeTimeProvider` instead of sleeping.
 
-## Résumé line
-> Built a multi-tenant API gateway and rate limiter in ASP.NET Core/YARP with Redis-backed token buckets (atomic Lua). Measured: cut cross-instance over-admission from 2.99× to within 0.3% of quota across 3 instances, added 0.3–0.7 ms p50 / 1.1–1.6 ms p99 overhead at 500 req/s, and kept 100% of payments flowing through a Redis outage while refunds failed closed in ~1 ms.
-
-Every number in that line comes from a report above. Say "Flux (API gateway)" to avoid confusion with Flux CD.
-
-## Milestones
-M0 Spec ✅ · M1 Skeleton ✅ · M2 Tenancy & auth ✅ · M3 Token bucket ✅ · M4 Break it ✅ · M5 Redis + resilience ✅ · M6 Prove it ✅ · M7 Showcase ✅ *(instead of a deploy: [ADR-0011](docs/adr/0011-no-home-server-deploy-publish-images.md))*
-
-The story of each, with exercises, is in [`docs/journal/`](docs/journal/); start at [`docs/README.md`](docs/README.md).
+## Documentation
+- [Specification](docs/spec.md): request lifecycle, API contract, data model, rate-limiting design
+- [Architecture decision records](docs/adr/): each significant decision, with the alternatives considered
+- [Experiment reports](docs/reports/): methodology and full results for the measurements above
+- [Design notes](docs/concepts/): token buckets, Lua atomicity, circuit breakers, caching, and more
