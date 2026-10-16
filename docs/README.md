@@ -27,8 +27,8 @@ These docs record **what** was built, **why** it was built that way, and **when*
 | [03 — In-memory token bucket](journal/03-token-bucket.md) | M3 | ✅ Done, in review |
 | [04 — Break it](journal/04-break-it.md) | M4 | ✅ Done, in review |
 | [05 — Redis + resilience](journal/05-redis-resilience.md) | M5 | ✅ Done, in review |
-| 06 — Prove it | M6 | Next |
-| 07 — Deploy | M7 | |
+| [06 — Prove it](journal/06-prove-it.md) | M6 | ✅ Done, in review |
+| 07 — Deploy | M7 | Next |
 
 | ADR | Decision |
 |-----|----------|
@@ -67,10 +67,16 @@ These docs record **what** was built, **why** it was built that way, and **when*
 | [Clock skew](concepts/clock-skew.md) | M5 |
 | [Timeouts and circuit breakers](concepts/timeouts-and-circuit-breakers.md) | M5 |
 | [Fail open vs. fail closed](concepts/fail-open-vs-fail-closed.md) | M5 |
+| [Latency percentiles](concepts/latency-percentiles.md) | M6 |
+| [Noisy-neighbour isolation](concepts/noisy-neighbour-isolation.md) | M6 |
+| [Benchmarking methodology](concepts/benchmarking-methodology.md) | M6 |
 
 | Report | Result |
 |--------|--------|
 | [E1 — per-instance buckets](reports/E1-per-instance-buckets.md) | 3 gateways allowed **2.99×** the limit (1 gateway: 1.00×) |
 | [E2 — fixed-window boundary](reports/E2-fixed-window-boundary.md) | **200 of 200** allowed in ~235 ms across a boundary (token bucket: 10–12) |
 | [E3 — Redis outage, default timeouts](reports/E3-redis-outage-default-timeouts.md) | requests hang **~5.5 s**, then `500`; afterwards **138 + 30 false `429`s** |
+| [P1 — shared Redis bucket](reports/P1-shared-redis-bucket.md) | 3 gateways allowed **608–609 of 610** (E1 was 1,822–1,825); N2 met |
+| [P2 — noisy neighbour](reports/P2-noisy-neighbour.md) | quiet merchant's p95 **no increase** under a 100× flood; backend CPU unchanged; N3 met |
+| [P3 — gateway overhead](reports/P3-gateway-overhead.md) | **p50 0.30–0.71 ms, p99 1.08–1.57 ms** at 500 req/s with Redis; N1 met |
 | [P4 — Redis outage, resilient](reports/P4-redis-outage-resilient.md) | payments **100% served** (degraded, normal latency), refunds `503` in **~1.1 ms**, recovery **~4.5 s**; N4 met (one caveat) |

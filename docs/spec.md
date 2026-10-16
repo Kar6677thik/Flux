@@ -383,9 +383,9 @@ These are **targets to verify, not results.** Reports will state actual numbers 
 
 | # | Target | Measured in |
 |---|--------|-------------|
-| N1 | Gateway overhead ≤ 2 ms at p50 and ≤ 10 ms at p99, at 500 req/s on the local machine, with the Redis limiter | P3 |
-| N2 | With 3 instances and Redis, a merchant's allowed count over 60 s is within ±5% of `B + r × 60` | P1 |
-| N3 | The quiet merchant's p95 latency rises by ≤ 10% while the noisy merchant sends 100× its limit | P2 |
+| N1 | Gateway overhead ≤ 2 ms at p50 and ≤ 10 ms at p99, at 500 req/s on the local machine, with the Redis limiter | P3 (✅ M6: p50 0.30–0.71 ms, p99 1.08–1.57 ms, two methods) |
+| N2 | With 3 instances and Redis, a merchant's allowed count over 60 s is within ±5% of `B + r × 60` | P1 (✅ M6: 608–609 of 610, ≤ 0.3%) |
+| N3 | The quiet merchant's p95 latency rises by ≤ 10% while the noisy merchant sends 100× its limit | P2 (✅ M6: no increase; the apparent decrease traced to CPU power states by a control run) |
 | N4 | During a Redis outage, no request waits more than ~50 ms extra. Payments keep flowing in degraded mode; refunds get a `503` in < 100 ms. Recovery is automatic once Redis returns. | P4 (✅ measured in M5: met; under a silent `pause` outage the tail of the first ~2 s reached 60–75 ms over normal before the breaker opened) |
 | N5 | On the server, the whole `flux` namespace stays within 1.5 GiB of memory limits and 2 GiB of disk | M7 |
 | N6 | No plaintext API key stored or logged. Clients cannot spoof `X-Flux-*` headers. Backends are unreachable from outside the cluster or Compose network. | Tests + M7 |

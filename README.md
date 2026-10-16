@@ -1,19 +1,65 @@
 # Flux
 
-A multi-tenant API gateway and rate limiter, built in ASP.NET Core and YARP, with Redis-backed token buckets per merchant and per route. Inspired by Razorpay's Edge gateway. It is a learning project: Project 1 of *10 Engineering Projects from Real Company Problems*.
+A multi-tenant API gateway and rate limiter in ASP.NET Core 10 and YARP. Each merchant is authenticated by API key and held to its plan's limit **per route**, through one atomic Redis Lua script shared by every gateway instance. When Redis fails, payments degrade gracefully and refunds fail closed. Inspired by Razorpay's Edge gateway. It's a learning project: Project 1 of *10 Engineering Projects from Real Company Problems*, documented end to end in [`docs/`](docs/README.md).
 
-> **Status:** M5, Redis + resilience done. Measured so far: 3 gateways with in-memory buckets let a merchant through at **2.99×** its limit ([E1](docs/reports/E1-per-instance-buckets.md)), and a fixed window allowed **200 requests in ~235 ms** against a 10 req/s plan ([E2](docs/reports/E2-fixed-window-boundary.md)). In M5, shared Redis buckets fix the first; during a Redis outage payments stayed **100% served** at normal latency, while refunds failed closed with a `503` in ~1.1 ms ([P4](docs/reports/P4-redis-outage-resilient.md)).
-> Start with **[docs/spec.md](docs/spec.md)**, or with **[docs/README.md](docs/README.md)** for the full reading order.
+> **Status:** M0–M6 done (spec, build, break, prove). M7, the deployment to a home k3s cluster via GitHub Actions, is next.
 
-## What it does (once built)
-- Authenticates each request by API key (`Authorization: Bearer flux_…`) and maps it to a merchant.
-- Enforces per-merchant, per-route limits from the merchant's plan (free: 10 req/s on payments; pro: 100 req/s).
-- Returns `429` with `Retry-After` and `X-RateLimit-*` headers when a limit is hit.
-- Shares limits across gateway instances through one atomic Redis Lua script.
-- Fails open (with a reduced local limit) for payments and fails closed for refunds when Redis is down.
-- Deploys to a home k3s cluster via GitHub Actions over Tailscale.
+## Architecture
+```mermaid
+flowchart LR
+    C["Client / k6"] -->|"Authorization: Bearer flux_..."| LB["nginx (local, L7)<br/>k8s Service (server)"]
+    LB --> G1["Gateway #1"]
+    LB --> G2["Gateway #2"]
+    LB --> G3["Gateway #3"]
+    G1 & G2 & G3 -->|"key + plan lookup<br/>(cached 60 s / 10 s)"| PG[("PostgreSQL<br/>merchants, plans, keys")]
+    G1 & G2 & G3 -->|"EVALSHA token_bucket.lua<br/>50 ms timeout + circuit breaker"| R[("Redis<br/>shared buckets")]
+    G1 & G2 & G3 -->|"YARP forward<br/>X-Flux-Merchant-Id"| P["payments"]
+    G1 & G2 & G3 -->|"YARP forward"| F["refunds"]
+```
+Each request: correlation id → strip client `X-Flux-*` headers → route group → API-key auth (cached) → rate limit (Redis, or the per-route failure policy) → forward → `X-RateLimit-*` + `Server-Timing` on the way back. Details: [spec §5](docs/spec.md).
+
+## Results (measured)
+All numbers were measured on one laptop (Intel Core Ultra 5 225H, Docker Desktop on WSL2, k6 capped at 2 CPUs). Each links to its report, with exact commands and every run.
+
+| Claim | Measured | Target | Report |
+|-------|----------|--------|--------|
+| In-memory buckets across 3 instances let a merchant through at ~3× its limit | **2.99×** (1,822–1,825 allowed vs. a bound of 610), 3 runs | (break) | [E1](docs/reports/E1-per-instance-buckets.md) |
+| A fixed window allows a boundary burst | **200 of 200** in ~235 ms on a 10 req/s plan (token bucket: 10–12) | (break) | [E2](docs/reports/E2-fixed-window-boundary.md) |
+| Client defaults turn a Redis outage into an outage of everything | requests hang **~5.5 s**, then `500`; afterwards **138 + 30 false `429`s** from a replayed queue | (break) | [E3](docs/reports/E3-redis-outage-default-timeouts.md) |
+| **One shared Redis bucket enforces the limit across 3 gateways** | **608–609 of 610** (≤ 0.3% error), 3 runs | ±5% (N2) | [P1](docs/reports/P1-shared-redis-bucket.md) |
+| **A merchant flooding at 100× its limit doesn't slow a quiet one** | quiet merchant's p95 **no increase** (3 paired runs); flooder got exactly its 609; backend CPU unchanged at 2% | p95 ≤ +10% (N3) | [P2](docs/reports/P2-noisy-neighbour.md) |
+| **The gateway adds little latency** | **p50 0.30–0.71 ms, p99 1.08–1.57 ms** at 500 req/s with Redis, by two methods; the Redis check is ~86% of it | p50 ≤ 2 ms, p99 ≤ 10 ms (N1) | [P3](docs/reports/P3-gateway-overhead.md) |
+| **A Redis outage is survivable** | payments **100% served** (degraded) at normal latency; refunds `503` in **~1.1 ms** (p50); automatic recovery in **4.1–4.6 s** | N4 | [P4](docs/reports/P4-redis-outage-resilient.md) |
+
+Caveat, from P4: during a *silent* outage (Redis frozen, connections still open), the slowest requests in the ~2 s before the circuit breaker opened took 60–75 ms over normal, not the targeted ≤ 50 ms.
+
+## Run it
+Requires the .NET SDK 10.0.401+ and Docker Desktop.
+```bash
+dotnet build -c Release && dotnet test                       # 135 tests; integration tests use real PostgreSQL and Redis
+docker compose -f deploy/compose/docker-compose.yml --profile single up --build -d
+curl -i localhost:8080/v1/payments/pay_1 -H "Authorization: Bearer flux_devQuietShopimg7Ccuzt5fONTt77X0UcK82ZspFVHT"
+```
+The dev keys and admin token are public on purpose and exist only in Development; the gateway refuses to seed them anywhere else. Three gateways behind nginx: `--profile cluster`. The experiments are one command each: see [`bench/README.md`](bench/README.md).
+
+## What's inside
+- **Auth:** `flux_` + 43 base62 characters (32 random bytes). Stored as SHA-256 plus a 12-character prefix, shown once. Positive cache 60 s, negative cache 10 s ([ADR-0003](docs/adr/0003-api-keys-sha256-bearer.md)).
+- **Rate limiting:**
+  - token bucket per `(merchant, route group)`, lazy refill, headers in delta seconds ([ADR-0002](docs/adr/0002-token-bucket.md));
+  - one Lua script on Redis's clock ([ADR-0004](docs/adr/0004-redis-lua-server-clock.md));
+  - three algorithms behind one interface (Strategy), chosen by config.
+- **Resilience:**
+  - Polly circuit breaker around a 50 ms timeout, with a fail-fast client ([ADR-0010](docs/adr/0010-resilience-polly-fail-fast-client.md));
+  - payments fail open to `limit ÷ instances`, refunds fail closed with a `503` ([ADR-0005](docs/adr/0005-per-route-failure-policy.md)).
+- **Observability:** `/metrics` (Prometheus, no per-merchant labels), `Server-Timing`, JSON logs carrying `requestId`/`merchantId`/`keyPrefix` and never full keys ([ADR-0009](docs/adr/0009-metrics-system-diagnostics-otel-prometheus.md)).
+- **Tests:** xUnit v3, Testcontainers (real PostgreSQL 17 and Redis 7.4, never mocked), `FakeTimeProvider` instead of sleeping.
+
+## Résumé line
+> Built a multi-tenant API gateway and rate limiter in ASP.NET Core/YARP with Redis-backed token buckets (atomic Lua). Measured: cut cross-instance over-admission from 2.99× to within 0.3% of quota across 3 instances, added 0.3–0.7 ms p50 / 1.1–1.6 ms p99 overhead at 500 req/s, and kept 100% of payments flowing through a Redis outage while refunds failed closed in ~1 ms.
+
+Every number in that line comes from a report above. Say "Flux (API gateway)" to avoid confusion with Flux CD.
 
 ## Milestones
-M0 Spec ✅ · M1 Skeleton ✅ · M2 Tenancy & auth ✅ · M3 Token bucket ✅ · M4 Break it ✅ · M5 Redis + resilience ✅ · M5 Redis + resilience · M6 Prove it · M7 Deploy
+M0 Spec ✅ · M1 Skeleton ✅ · M2 Tenancy & auth ✅ · M3 Token bucket ✅ · M4 Break it ✅ · M5 Redis + resilience ✅ · M6 Prove it ✅ · M7 Deploy
 
-The results (measured numbers only) will appear here after M6.
+The story of each, with exercises, is in [`docs/journal/`](docs/journal/); start at [`docs/README.md`](docs/README.md).

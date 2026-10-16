@@ -10,6 +10,7 @@ These are the words used across Flux docs and code. The list grows with every mi
 | **Assembly fixture** | An xUnit v3 fixture shared by every test in a test project. Flux uses one to start a single PostgreSQL container per test run. | M2 |
 | **Authentication vs. authorization** | *Authentication* proves who the caller is (bad key → `401`). *Authorization* decides what they may do (suspended → `403`). | M2 |
 | **Backlog (Redis client)** | Commands StackExchange.Redis holds while disconnected. The default queues them until reconnect or timeout; Flux uses `FailFast` (E3 showed why). | M5 |
+| **Baseline (benchmark)** | The same measurement without the change under test (one gateway, no flood, direct to the backend), so the change's effect can be isolated. | M6 |
 | **Bucket** | The state of one `(merchant, route group)` pair: how many tokens are left and when they were last refilled. | M3 |
 | **Burst capacity (`B`)** | The most tokens a bucket can hold, which is also the most requests allowed in one instant. | M3 |
 | **Cache penetration** | Lookups for data that doesn't exist always miss the cache and hit the database. Negative caching reduces it for *repeated* keys. | M2 |
@@ -24,6 +25,7 @@ These are the words used across Flux docs and code. The list grows with every mi
 | **Consistent hashing** | Mapping keys to servers so that each key always lands on the same server, and adding or removing a server moves only a few keys. | M4 |
 | **Constant arrival rate** | k6's open-loop executor: start N iterations per second, however long each one takes. | M4 |
 | **Constant-time comparison** | Comparing secrets in a way that takes the same time wherever they differ, so timing reveals nothing (`CryptographicOperations.FixedTimeEquals`). | M2 |
+| **Control run** | A run designed to test an *explanation* of a surprising result, changing one suspected cause and nothing else (P2's CPU burner). | M6 |
 | **Coordinated omission** | A load-testing error: a load generator that waits for slow responses sends fewer requests, so slowness hides itself. Avoided with constant-arrival-rate load. | M4 |
 | **Delta seconds** | A duration ("in 3 seconds") rather than a timestamp ("at 12:00:03"). Immune to clock differences between client and server, so `Retry-After` and `X-RateLimit-Reset` use it. | M3 |
 | **Design-time factory** | `IDesignTimeDbContextFactory`: tells `dotnet ef` how to build the DbContext without starting the app. | M2 |
@@ -47,6 +49,7 @@ These are the words used across Flux docs and code. The list grows with every mi
 | **Launch profile** | A named way to `dotnet run` a project (port, environment variables), stored in `Properties/launchSettings.json`. It only affects `dotnet run`, never containers. | M1 |
 | **Lazy refill** | Computing the tokens earned since the last request when a bucket is read, instead of adding them on a timer. | M3 |
 | **Liveness / readiness** | *Liveness*: should this process be restarted? *Readiness*: should it receive traffic right now? | M1 |
+| **Load shedding** | Deliberately refusing excess work early and cheaply under overload, so the system keeps serving what it accepts. | M6 |
 | **Lost update** | Two read-modify-write sequences interleave, and one write silently overwrites the other's. | M5 |
 | **Lua script (Redis)** | A small program Redis runs atomically. No other command runs while it executes. | M5 |
 | **Megatron** | The home server (on the tailnet at 100.91.115.46). | M7 |
@@ -75,6 +78,7 @@ These are the words used across Flux docs and code. The list grows with every mi
 | **Sliding window counter** | A fixed-window variant that blends the current count with a weighted share of the previous window, removing most of the boundary burst. | M4 |
 | **Sticky sessions** | A load balancer sending one client's requests to the same server (by cookie or IP). | M4 |
 | **Strategy pattern** | Hiding interchangeable algorithms behind one interface and choosing one by configuration (`IRateLimiter`). | M3 |
+| **Tail latency** | The slow end of the latency distribution (p99, p99.9, max). What users of fan-out systems actually feel. | M6 |
 | **Tailnet** | Your private Tailscale network. Only your devices can reach services exposed on it. | M7 |
 | **Tenant** | One customer in a shared (multi-tenant) system. In Flux, a merchant. | M2 |
 | **Testcontainers** | A library that starts real dependencies (PostgreSQL, Redis) in throwaway Docker containers for tests. | M2 |
@@ -85,5 +89,6 @@ These are the words used across Flux docs and code. The list grows with every mi
 | **UUIDv7** | A UUID whose first bits are a timestamp, so new ids sort by creation time and index inserts stay at the end of the index (`Guid.CreateVersion7`). | M2 |
 | **Valkey** | The open-source fork of Redis created after Redis's 2024 licence change. Protocol-compatible. | M5 |
 | **Virtual user (VU)** | One concurrent k6 worker running the script's default function. | M4 |
+| **Warm-up** | Requests or runs discarded or flagged because they pay one-off costs (JIT compilation, empty caches, new connections). | M6 |
 | **`WWW-Authenticate`** | The header a `401` must include, telling the client which authentication scheme to use (`Bearer`). | M2 |
 | **YARP** | "Yet Another Reverse Proxy": Microsoft's reverse-proxy library for ASP.NET Core. | M1 |
