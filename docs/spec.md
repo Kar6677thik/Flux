@@ -27,7 +27,7 @@ Flux rebuilds this problem at learning scale. A gateway sits in front of two bac
 | G5 | Behave deliberately when Redis is down, chosen per route. | Experiment E3 → P4; ADR-0005. |
 | G6 | Protect quiet merchants from noisy ones. | Experiment P2 (quiet merchant's p95 stays flat). |
 | G7 | Measure the latency the gateway itself adds. | Experiment P3 (p50/p99). |
-| G8 | Deploy to the home server automatically from GitHub Actions. | M7: a push to `main` results in a running, smoke-tested deployment. |
+| G8 | ~~Deploy to the home server automatically from GitHub Actions.~~ | *Superseded by [ADR-0011](adr/0011-no-home-server-deploy-publish-images.md): not deployed. CI publishes images to GHCR instead, and a recorded demo shows the system.* |
 | G9 | Document everything so the author can learn the whole system end to end. | `docs/` journal, concept notes, ADRs and reports for every milestone. |
 
 ## 3. Non-goals
@@ -387,7 +387,7 @@ These are **targets to verify, not results.** Reports will state actual numbers 
 | N2 | With 3 instances and Redis, a merchant's allowed count over 60 s is within ±5% of `B + r × 60` | P1 (✅ M6: 608–609 of 610, ≤ 0.3%) |
 | N3 | The quiet merchant's p95 latency rises by ≤ 10% while the noisy merchant sends 100× its limit | P2 (✅ M6: no increase; the apparent decrease traced to CPU power states by a control run) |
 | N4 | During a Redis outage, no request waits more than ~50 ms extra. Payments keep flowing in degraded mode; refunds get a `503` in < 100 ms. Recovery is automatic once Redis returns. | P4 (✅ measured in M5: met; under a silent `pause` outage the tail of the first ~2 s reached 60–75 ms over normal before the breaker opened) |
-| N5 | On the server, the whole `flux` namespace stays within 1.5 GiB of memory limits and 2 GiB of disk | M7 |
+| N5 | ~~On the server, the whole `flux` namespace stays within 1.5 GiB of memory limits and 2 GiB of disk~~ | Dropped with G8 ([ADR-0011](adr/0011-no-home-server-deploy-publish-images.md)) |
 | N6 | No plaintext API key stored or logged. Clients cannot spoof `X-Flux-*` headers. Backends are unreachable from outside the cluster or Compose network. | Tests + M7 |
 
 ## 14. Testing strategy
@@ -431,7 +431,9 @@ Each experiment has a hypothesis, a reproducible command and a report in `docs/r
 | **CI** | GitHub-hosted Ubuntu runners | Build → unit + integration tests (Testcontainers) → build images → push to GHCR on `main` → deploy |
 | **Home server** | k3s namespace `flux` on Megatron | Deployed only by GitHub Actions (§17) |
 
-## 17. Deployment design (implemented in M7; summarised now so nothing surprises us)
+## 17. Deployment design (not implemented: superseded by [ADR-0011](adr/0011-no-home-server-deploy-publish-images.md))
+
+> *Decided 2026-10-16, before M7 began:* Flux isn't deployed to Megatron. A tailnet-only deployment would be invisible to anyone else, a public one would be risky, and the repo's measured results are the better showcase. M7 instead publishes images to GHCR, with a compose override and a recorded demo. The design below is kept as a worked plan for if Kubernetes practice becomes the goal.
 
 This follows the same pattern Slate already uses successfully ([ADR-0006](adr/0006-deploy-k3s-actions-tailscale.md)).
 
@@ -517,7 +519,7 @@ Each milestone is a branch (`m<N>-<slug>`) and a pull request into `main`. Nothi
 | M4 | Break it | `InMemoryFixedWindow`, Compose `cluster` profile + nginx, k6 scripts, **E1 and E2** with reports | Both reports show the failure with numbers | fixed-and-sliding-windows, load-balancing, load-testing-with-k6, coordinated-omission |
 | M5 | Redis + resilience | `token_bucket.lua`, `RedisTokenBucket`, `ResilientRateLimiter` (timeout, breaker, per-route policy), **E3 then P4** | Concurrency test allows exactly `B`; Redis-down tests pass; E3 and P4 reports | redis-basics, lua-atomicity, clock-skew, timeouts-and-circuit-breakers, fail-open-vs-fail-closed |
 | M6 | Prove it | **P1, P2, P3** reports, final README (diagram, results, résumé line with **measured** numbers only) | All N1–N4 measured and honestly reported | latency-percentiles, noisy-neighbour-isolation, benchmarking-methodology |
-| M7 | Deploy | k3s manifests, `flux-deploy` helper, `deploy.yml`, smoke test, runbook | A push to `main` → running on Megatron → smoke test green | containers-and-registries, kubernetes-basics-on-k3s, continuous-deployment, secrets-management, tailscale-serve |
+| M7 | Showcase *(was: Deploy; changed by [ADR-0011](adr/0011-no-home-server-deploy-publish-images.md))* | CI publishes images to GHCR, a compose override that runs them, a recorded demo, README charts, a CI badge | Anyone with Docker can run Flux without building it; the README shows it working | containers-and-registries |
 
 **Stretch goals, only after M7:** a sliding-window-counter algorithm, per-merchant limit overrides, a per-IP limit for unauthenticated traffic, and a comparison with ASP.NET Core's built-in `System.Threading.RateLimiting`.
 
@@ -561,6 +563,6 @@ Each milestone is a branch (`m<N>-<slug>`) and a pull request into `main`. Nothi
 |------|-----------|
 | ~~Exact NuGet and container image versions~~ | ✅ M1: `Directory.Packages.props` (YARP 2.3.0, xUnit v3 4.0.2, Mvc.Testing 10.0.13); images `dotnet/sdk:10.0` / `aspnet:10.0`; deployments pin by git SHA (M7) |
 | ~~Metrics library: OpenTelemetry Prometheus exporter or `prometheus-net`~~ | ✅ M3: `System.Diagnostics.Metrics` instruments + the OpenTelemetry Prometheus exporter, pinned beta ([ADR-0009](adr/0009-metrics-system-diagnostics-otel-prometheus.md)) |
-| Free NodePort and final Tailscale Serve port | M7 |
-| Whether GHCR packages need to be made public manually | M7 |
-| Whether to rerun the experiments on Megatron | After M6, your call |
+| ~~Free NodePort and final Tailscale Serve port~~ | Not needed: no deployment (ADR-0011) |
+| ~~Whether GHCR packages need to be made public manually~~ | ✅ M7: yes, once per package, in its settings (ADR-0011) |
+| ~~Whether to rerun the experiments on Megatron~~ | No: there's no deployment there (ADR-0011) |

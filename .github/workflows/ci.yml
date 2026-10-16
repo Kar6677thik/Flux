@@ -1,6 +1,6 @@
 # Continuous integration (Field Guide §22.1): every push and pull request is built and tested on a
 # fresh, disposable Ubuntu machine, so "works on my laptop" can't sneak into main.
-# M7 extends this with: push images to GHCR (main only) -> deploy to Megatron.
+# On main it also publishes both images to GHCR (M7); there is no deploy step (ADR-0011).
 name: CI
 
 on:
@@ -46,20 +46,50 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Least privilege per job: only this job may write packages, and it only pushes from main.
+    permissions:
+      contents: read
+      packages: write
     strategy:
       matrix:
-        service: [Gateway, Backend]
+        include:
+          - service: Gateway
+            image: flux-gateway
+          - service: Backend
+            image: flux-backend
+    env:
+      PUBLISH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: docker/setup-buildx-action@v3
 
-      # Proves the Dockerfiles still build. Nothing is pushed until M7.
+      # Registry paths must be lowercase; the account name isn't.
+      - name: Image name
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${{ matrix.image }}" >> "$GITHUB_ENV"
+
+      - name: Log in to GHCR
+        if: env.PUBLISH == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Every push and PR proves the Dockerfiles build. Only main publishes, tagged with the
+      # commit (immutable: "exactly this code") and latest (what the demo compose file pulls).
       - name: Build Flux.${{ matrix.service }}
         uses: docker/build-push-action@v6
         with:
           context: .
           file: src/Flux.${{ matrix.service }}/Dockerfile
-          push: false
+          push: ${{ env.PUBLISH == 'true' }}
+          tags: |
+            ${{ env.IMAGE }}:sha-${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.description=Flux ${{ matrix.service }} (multi-tenant API gateway and rate limiter)
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
