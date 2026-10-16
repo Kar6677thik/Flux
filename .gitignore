@@ -480,3 +480,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# k6 raw output (the numbers that matter are copied into docs/reports/)
+bench/results/

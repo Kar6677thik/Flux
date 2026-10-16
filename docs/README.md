@@ -25,8 +25,8 @@ These docs record **what** was built, **why** it was built that way, and **when*
 | [01 — Skeleton](journal/01-skeleton.md) | M1 | ✅ Done |
 | [02 — Tenancy & auth](journal/02-tenancy-auth.md) | M2 | ✅ Done, in review |
 | [03 — In-memory token bucket](journal/03-token-bucket.md) | M3 | ✅ Done, in review |
-| 04 — Break it | M4 | Next |
-| 05 — Redis + resilience | M5 | |
+| [04 — Break it](journal/04-break-it.md) | M4 | ✅ Done, in review |
+| 05 — Redis + resilience | M5 | Next |
 | 06 — Prove it | M6 | |
 | 07 — Deploy | M7 | |
 
@@ -57,3 +57,12 @@ These docs record **what** was built, **why** it was built that way, and **when*
 | [Rate-limit headers](concepts/rate-limit-headers.md) | M3 |
 | [Testing code that depends on time](concepts/testing-time.md) | M3 |
 | [Metrics and cardinality](concepts/metrics-and-cardinality.md) | M3 |
+| [Fixed and sliding windows](concepts/fixed-and-sliding-windows.md) | M4 |
+| [Load balancing (L4 vs. L7) and shared state](concepts/load-balancing.md) | M4 |
+| [Load testing with k6](concepts/load-testing-with-k6.md) | M4 |
+| [Coordinated omission](concepts/coordinated-omission.md) | M4 |
+
+| Report | Result |
+|--------|--------|
+| [E1 — per-instance buckets](reports/E1-per-instance-buckets.md) | 3 gateways allowed **2.99×** the limit (1 gateway: 1.00×) |
+| [E2 — fixed-window boundary](reports/E2-fixed-window-boundary.md) | **200 of 200** allowed in ~235 ms across a boundary (token bucket: 10–12) |

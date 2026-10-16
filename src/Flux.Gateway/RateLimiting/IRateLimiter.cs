@@ -13,10 +13,12 @@ public enum DecisionSource
 
 /// <summary>
 /// The outcome of one admission check. Durations are exact; rounding to whole seconds happens only
-/// when they become headers (<see cref="RateLimitHeaders"/>).
+/// when they become headers (<see cref="RateLimitHeaders"/>). Limit is the algorithm's own idea of
+/// "how many at most": the bucket capacity for a token bucket, the per-window quota for a fixed window.
 /// </summary>
 public sealed record RateLimitDecision(
     bool Allowed,
+    int Limit,
     int Remaining,
     TimeSpan RetryAfter,
     TimeSpan ResetAfter,

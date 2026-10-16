@@ -76,6 +76,18 @@ public sealed class StartupTests(EchoUpstream upstream, PostgresFixture postgres
         Assert.Contains("Admin:Token", error.Message);
     }
 
+    [Theory]
+    [InlineData("RateLimiting:Algorithm", "SlidingLog")]
+    [InlineData("RateLimiting:FixedWindow:WindowSeconds", "0")]
+    public async Task Invalid_rate_limiting_settings_refuse_to_start(string key, string value)
+    {
+        await using var gateway = new GatewayFactory(postgres.ConnectionString, upstream.Address,
+            new Dictionary<string, string?> { [key] = value });
+
+        var error = Assert.ThrowsAny<Exception>(() => gateway.CreateClient());
+        Assert.Contains("RateLimiting:", error.Message);
+    }
+
     [Fact]
     public async Task The_database_itself_rejects_an_invalid_merchant_status()
     {

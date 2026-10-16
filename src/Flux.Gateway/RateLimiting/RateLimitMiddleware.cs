@@ -41,7 +41,7 @@ public sealed class RateLimitMiddleware(
         // copies the backend's headers over ours when it forwards. This runs after that copy.
         http.Response.OnStarting(() =>
         {
-            RateLimitHeaders.Apply(http.Response.Headers, decision, limit);
+            RateLimitHeaders.Apply(http.Response.Headers, decision);
             return Task.CompletedTask;
         });
 

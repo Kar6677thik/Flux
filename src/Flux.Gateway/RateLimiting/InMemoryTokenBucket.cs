@@ -73,7 +73,7 @@ public sealed class InMemoryTokenBucket(TimeProvider time) : IRateLimiter
 
                 var retryAfter = allowed ? TimeSpan.Zero : CeilingTicks((1 - _tokens) / limit.RefillPerSecond);
                 var resetAfter = CeilingTicks((limit.BurstCapacity - _tokens) / limit.RefillPerSecond);
-                return new RateLimitDecision(allowed, (int)Math.Floor(_tokens), retryAfter, resetAfter);
+                return new RateLimitDecision(allowed, limit.BurstCapacity, (int)Math.Floor(_tokens), retryAfter, resetAfter);
             }
         }
 

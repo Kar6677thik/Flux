@@ -1,24 +1,21 @@
 using Flux.Gateway.RateLimiting;
-using Flux.Gateway.Tenancy;
 using Microsoft.AspNetCore.Http;
 
 namespace Flux.Gateway.UnitTests;
 
 public sealed class RateLimitHeadersTests
 {
-    private static readonly RouteLimit Free = new(10, 10);
-
     private static IHeaderDictionary Apply(RateLimitDecision decision)
     {
         IHeaderDictionary headers = new HeaderDictionary();
-        RateLimitHeaders.Apply(headers, decision, Free);
+        RateLimitHeaders.Apply(headers, decision);
         return headers;
     }
 
     [Fact]
     public void An_allowed_request_gets_limit_remaining_and_reset_but_no_retry_after()
     {
-        var headers = Apply(new RateLimitDecision(true, 9, TimeSpan.Zero, TimeSpan.FromMilliseconds(100)));
+        var headers = Apply(new RateLimitDecision(true, 10, 9, TimeSpan.Zero, TimeSpan.FromMilliseconds(100)));
 
         Assert.Equal("10", headers["X-RateLimit-Limit"]);
         Assert.Equal("9", headers["X-RateLimit-Remaining"]);
@@ -34,7 +31,7 @@ public sealed class RateLimitHeadersTests
     [InlineData(0, "1")]       // a limited response always says "at least 1"
     public void Retry_after_rounds_up_to_whole_seconds_minimum_one(int retryAfterMs, string expected)
     {
-        var headers = Apply(new RateLimitDecision(false, 0, TimeSpan.FromMilliseconds(retryAfterMs), TimeSpan.FromSeconds(1)));
+        var headers = Apply(new RateLimitDecision(false, 10, 0, TimeSpan.FromMilliseconds(retryAfterMs), TimeSpan.FromSeconds(1)));
 
         Assert.Equal(expected, headers.RetryAfter);
     }
@@ -48,7 +45,7 @@ public sealed class RateLimitHeadersTests
     [Fact]
     public void A_fallback_decision_is_marked_degraded()
     {
-        var headers = Apply(new RateLimitDecision(true, 3, TimeSpan.Zero, TimeSpan.FromSeconds(1), DecisionSource.Fallback));
+        var headers = Apply(new RateLimitDecision(true, 10, 3, TimeSpan.Zero, TimeSpan.FromSeconds(1), DecisionSource.Fallback));
 
         Assert.Equal("true", headers["X-RateLimit-Degraded"]);
     }
