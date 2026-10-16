@@ -1,6 +1,6 @@
 # ADR-0006: Deploy to k3s on Megatron via GitHub Actions, Tailscale and a narrow sudo helper; tailnet only
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR-0011](0011-no-home-server-deploy-publish-images.md) (2026-10-16): Flux isn't deployed to Megatron. This design was never built and is kept as a worked plan.
 - **Date:** 2026-10-15
 - **Milestone:** M0 (implemented in M7)
 

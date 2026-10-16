@@ -23,12 +23,12 @@ These docs record **what** was built, **why** it was built that way, and **when*
 |---------|-----------|--------|
 | [00 — Specification](journal/00-specification.md) | M0 | ✅ Done |
 | [01 — Skeleton](journal/01-skeleton.md) | M1 | ✅ Done |
-| [02 — Tenancy & auth](journal/02-tenancy-auth.md) | M2 | ✅ Done, in review |
-| [03 — In-memory token bucket](journal/03-token-bucket.md) | M3 | ✅ Done, in review |
-| [04 — Break it](journal/04-break-it.md) | M4 | ✅ Done, in review |
-| [05 — Redis + resilience](journal/05-redis-resilience.md) | M5 | ✅ Done, in review |
-| [06 — Prove it](journal/06-prove-it.md) | M6 | ✅ Done, in review |
-| 07 — Deploy | M7 | Next |
+| [02 — Tenancy & auth](journal/02-tenancy-auth.md) | M2 | ✅ Done |
+| [03 — In-memory token bucket](journal/03-token-bucket.md) | M3 | ✅ Done |
+| [04 — Break it](journal/04-break-it.md) | M4 | ✅ Done |
+| [05 — Redis + resilience](journal/05-redis-resilience.md) | M5 | ✅ Done |
+| [06 — Prove it](journal/06-prove-it.md) | M6 | ✅ Done |
+| [07 — Showcase (instead of deploy)](journal/07-showcase.md) | M7 | ✅ Done, in review |
 
 | ADR | Decision |
 |-----|----------|
@@ -37,11 +37,12 @@ These docs record **what** was built, **why** it was built that way, and **when*
 | [0003](adr/0003-api-keys-sha256-bearer.md) | Bearer API keys stored as SHA-256 hashes |
 | [0004](adr/0004-redis-lua-server-clock.md) | Redis + one atomic Lua script + Redis's clock |
 | [0005](adr/0005-per-route-failure-policy.md) | Payments fail open (with local fallback), refunds fail closed |
-| [0006](adr/0006-deploy-k3s-actions-tailscale.md) | k3s via GitHub Actions + Tailscale + narrow sudo helper; tailnet only |
+| [0006](adr/0006-deploy-k3s-actions-tailscale.md) | ~~k3s via GitHub Actions + Tailscale + narrow sudo helper; tailnet only~~ (superseded by 0011) |
 | [0007](adr/0007-one-fake-backend-image.md) | One fake-backend codebase run as two services |
 | [0008](adr/0008-auth-when-postgres-is-down.md) | PostgreSQL down → cached keys keep working, uncached keys get `503 auth_unavailable` |
 | [0009](adr/0009-metrics-system-diagnostics-otel-prometheus.md) | Metrics: `System.Diagnostics.Metrics` + OpenTelemetry's Prometheus exporter |
 | [0010](adr/0010-resilience-polly-fail-fast-client.md) | Resilience via Polly v8, a fail-fast Redis client, and "unrequested cancellation = failure" |
+| [0011](adr/0011-no-home-server-deploy-publish-images.md) | Don't deploy to the home server; publish images and a recorded demo instead (supersedes 0006) |
 
 | Concept note | Milestone |
 |--------------|-----------|
@@ -70,6 +71,7 @@ These docs record **what** was built, **why** it was built that way, and **when*
 | [Latency percentiles](concepts/latency-percentiles.md) | M6 |
 | [Noisy-neighbour isolation](concepts/noisy-neighbour-isolation.md) | M6 |
 | [Benchmarking methodology](concepts/benchmarking-methodology.md) | M6 |
+| [Containers and registries](concepts/containers-and-registries.md) | M7 |
 
 | Report | Result |
 |--------|--------|

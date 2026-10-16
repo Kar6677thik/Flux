@@ -12,6 +12,11 @@ Every experiment in spec §15 has a script here and a report in [`docs/reports/`
 
 `run-outage.sh <label> [stop|pause]` starts the k6 run, breaks Redis at +20 s, heals it about 20 s later, records both instants in `bench/results/<label>-events.txt`, then runs [`analyze_outage.py`](analyze_outage.py). That script uses only the standard library: it places each request in a phase by the moment it was *sent*, and prints the per-phase table and per-second timeline used in the reports.
 
+## The README's visuals
+- **`demo.sh`**: a ~30 s tour (auth, a 429 burst, Redis killed live, recovery) against a running `single` stack with `FLUX_ALGORITHM=RedisTokenBucket FLUX_ASSUMED_INSTANCES=1`. It stops and starts the Compose Redis.
+- **`record_demo.py`** records it as an asciicast (`docs/images/demo.cast`), then render it with `npx --yes svg-term-cli --in docs/images/demo.cast --out docs/images/demo.svg --window --width 100 --height 34`. svg-term is a one-off local tool with old dependencies; only its output is committed.
+- **`make_charts.py`** (matplotlib) draws `docs/images/{limits,outage,outage-latency}-{light,dark}.svg` from the raw E3/P4 NDJSON in `bench/results/` and the E1/P1 report numbers.
+
 ## Running one
 ```bash
 docker compose -f deploy/compose/docker-compose.yml --profile cluster up --build -d
