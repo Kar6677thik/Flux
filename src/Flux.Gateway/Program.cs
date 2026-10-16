@@ -27,7 +27,10 @@ builder.Services.AddOptions<AdminOptions>().BindConfiguration(AdminOptions.Secti
     .Validate(o => o.IsValid, $"Admin:Token must be at least {AdminOptions.MinTokenLength} characters, or unset to disable the admin API.")
     .ValidateOnStart();
 builder.Services.AddOptions<DatabaseOptions>().BindConfiguration(DatabaseOptions.SectionName);
-builder.Services.AddOptions<RateLimitingOptions>().BindConfiguration(RateLimitingOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
+builder.Services.AddOptions<RateLimitingOptions>().BindConfiguration(RateLimitingOptions.SectionName)
+    .Validate(o => o.IsValid(out _), $"RateLimiting:Algorithm must be one of: {string.Join(", ", RateLimitingOptions.Algorithms)}; " +
+        "RateLimiting:FixedWindow:WindowSeconds must be between 1 and 3600.")
+    .ValidateOnStart();
 
 // By default minimal APIs throw on an unreadable body only in Development; elsewhere they answer
 // with a bare 400. Throwing everywhere sends both through the exception handler's Problem Details.
@@ -48,9 +51,11 @@ builder.Services.AddHostedService<PlanRefreshService>();
 
 // Strategy (spec §9.1): the algorithm is chosen by config, and callers only see IRateLimiter.
 builder.Services.AddSingleton<InMemoryTokenBucket>();
+builder.Services.AddSingleton<InMemoryFixedWindow>();
 builder.Services.AddSingleton<IRateLimiter>(sp => sp.GetRequiredService<IOptions<RateLimitingOptions>>().Value.Algorithm switch
 {
     InMemoryTokenBucket.Name => sp.GetRequiredService<InMemoryTokenBucket>(),
+    InMemoryFixedWindow.Name => sp.GetRequiredService<InMemoryFixedWindow>(),   // experiment E2 only
     var other => throw new InvalidOperationException($"Unknown RateLimiting:Algorithm '{other}'."),
 });
 
@@ -62,6 +67,11 @@ builder.Services.AddOpenTelemetry().WithMetrics(metrics => metrics
 var app = builder.Build();
 
 await DatabaseStartup.RunAsync(app);
+
+// "Migrate, seed, exit": Compose runs this once before any gateway starts, so three gateways
+// never race to migrate the same database (spec §17 has the same rule for production).
+if (args.Contains("--migrate-only"))
+    return;
 
 // Order matters: this is the request lifecycle from spec §5.
 app.UseExceptionHandler(error => error.Run(http =>

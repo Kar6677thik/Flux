@@ -127,6 +127,21 @@ public sealed class RateLimitContractTests(EchoUpstream upstream, PostgresFixtur
         Assert.False((await gateway.CreateClient().GetAsync("/v1/payments/pay_1", Ct)).Headers.Contains("X-RateLimit-Limit"));
     }
 
+    [Fact]
+    public async Task Config_selects_the_algorithm_without_any_other_change()
+    {
+        var gateway = new GatewayFactory(postgres.ConnectionString, upstream.Address,
+            new Dictionary<string, string?> { ["RateLimiting:Algorithm"] = "InMemoryFixedWindow" });
+        _gateways.Add(gateway);
+        var merchant = await gateway.CreateMerchantAsync("free", Ct);
+
+        var response = await gateway.WithKey(merchant.ApiKey).GetAsync("/v1/payments/pay_1", Ct);
+
+        // Same middleware, same headers, different Strategy: the fixed window's quota is r × W = 100.
+        Assert.Equal("100", Header(response, "X-RateLimit-Limit"));
+        Assert.Equal("99", Header(response, "X-RateLimit-Remaining"));
+    }
+
     public async ValueTask DisposeAsync()
     {
         foreach (var gateway in _gateways)

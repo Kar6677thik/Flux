@@ -357,7 +357,7 @@ Settings use ASP.NET Core's normal configuration (`appsettings.json`), overridde
 | `ConnectionStrings__Postgres` | — | Required |
 | `ConnectionStrings__Redis` | — | Required when the algorithm is `RedisTokenBucket` |
 | `RateLimiting__Algorithm` | `InMemoryTokenBucket` | Also `InMemoryFixedWindow` or `RedisTokenBucket` |
-| `RateLimiting__FixedWindow__WindowSeconds` | `10` | Experiment E2 only |
+| `RateLimiting__FixedWindow__WindowSeconds` | `10` | Experiment E2 only. Must be 1–3600 (validated since M4) |
 | `RateLimiting__Redis__TimeoutMs` | `50` | Per-call timeout |
 | `RateLimiting__Fallback__AssumedInstances` | `3` | Divides limits in fail-open mode |
 | `RateLimiting__FailurePolicy__payments` | `FailOpen` | Per route group |
@@ -425,7 +425,7 @@ Each experiment has a hypothesis, a reproducible command and a report in `docs/r
 
 | Environment | What runs | How |
 |-------------|-----------|-----|
-| **Local** | PostgreSQL, Redis, payments, refunds, and 1 gateway (`single` profile) or 3 gateways + nginx (`cluster` profile). k6 on demand (`bench` profile). | `docker compose --profile <p> up`. The gateway can also run from the IDE with `dotnet run` against Compose's databases. |
+| **Local** | PostgreSQL, Redis, payments, refunds, and 1 gateway (`single` profile) or 3 gateways + nginx (`cluster` profile). k6 on demand (`bench` profile). *Since M4:* a one-shot `migrate` service (the gateway image with `--migrate-only`) migrates and seeds before any gateway starts. | `docker compose --profile <p> up`. The gateway can also run from the IDE with `dotnet run` against Compose's databases. |
 | **CI** | GitHub-hosted Ubuntu runners | Build → unit + integration tests (Testcontainers) → build images → push to GHCR on `main` → deploy |
 | **Home server** | k3s namespace `flux` on Megatron | Deployed only by GitHub Actions (§17) |
 

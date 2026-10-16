@@ -1,5 +1,4 @@
 using System.Globalization;
-using Flux.Gateway.Tenancy;
 
 namespace Flux.Gateway.RateLimiting;
 
@@ -14,9 +13,9 @@ public static class RateLimitHeaders
     public const string Reset = "X-RateLimit-Reset";
     public const string Degraded = "X-RateLimit-Degraded";
 
-    public static void Apply(IHeaderDictionary headers, RateLimitDecision decision, RouteLimit limit)
+    public static void Apply(IHeaderDictionary headers, RateLimitDecision decision)
     {
-        headers[Limit] = limit.BurstCapacity.ToString(CultureInfo.InvariantCulture);
+        headers[Limit] = decision.Limit.ToString(CultureInfo.InvariantCulture);
         headers[Remaining] = decision.Remaining.ToString(CultureInfo.InvariantCulture);
         headers[Reset] = CeilingSeconds(decision.ResetAfter).ToString(CultureInfo.InvariantCulture);
         if (!decision.Allowed)

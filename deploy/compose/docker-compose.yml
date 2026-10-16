@@ -2,10 +2,13 @@
 #
 #   docker compose -f deploy/compose/docker-compose.yml --profile single up --build
 #
-# Profiles:
-#   single   one gateway on http://localhost:8080          (M1; PostgreSQL since M2)
-#   cluster  three gateways behind nginx on :8080           (arrives in M4)
-#   bench    k6 load generator, run on demand               (arrives in M4)
+# Profiles (use single OR cluster: both serve http://localhost:8080):
+#   single   one gateway                                     (M1; PostgreSQL since M2)
+#   cluster  three gateways behind nginx (L7 round-robin)    (M4)
+#   bench    k6 load generator, run on demand                (M4; see bench/README.md)
+#
+# The rate-limiting algorithm comes from the shell, so experiments can switch it without edits:
+#   FLUX_ALGORITHM=InMemoryFixedWindow docker compose … up -d
 #
 # The backends publish no ports. From your machine the only way in is through the gateway,
 # which is the same isolation the k3s NetworkPolicy gives us on the server (spec N6).
@@ -22,6 +25,29 @@ name: flux
 x-backend: &backend
   image: flux-backend:local
   restart: unless-stopped
+
+# Everything the gateways share. The image is built by `migrate`; nothing here pulls or builds.
+x-gateway: &gateway
+  image: flux-gateway:local
+  pull_policy: never
+  restart: unless-stopped
+  environment:
+    # Development: the dev admin token and console logs. Migration and seeding are migrate's job.
+    ASPNETCORE_ENVIRONMENT: Development
+    ConnectionStrings__Postgres: Host=postgres;Database=flux;Username=flux;Password=flux-local-dev
+    Database__MigrateOnStartup: "false"
+    Database__SeedDevData: "false"
+    RateLimiting__Algorithm: ${FLUX_ALGORITHM:-InMemoryTokenBucket}
+    # Compose's internal DNS resolves service names, so a gateway reaches "payments:8080".
+    ReverseProxy__Clusters__payments__Destinations__d1__Address: http://payments:8080
+    ReverseProxy__Clusters__refunds__Destinations__d1__Address: http://refunds:8080
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+    payments:
+      condition: service_started
+    refunds:
+      condition: service_started
 
 services:
   postgres:
@@ -58,30 +84,68 @@ services:
       Backend__ServiceName: refunds
       Backend__LatencyMs: "5"
 
-  gateway:
-    profiles: [single]
+  # Runs once and exits: apply migrations, seed the demo merchants, done. Every gateway waits for
+  # it, so in the cluster profile three gateways never race to migrate one database. The same
+  # "migrate before rollout" rule applies in production (spec §17). It also builds the gateway
+  # image, and only it does, for the same reason payments alone builds the backend image.
+  migrate:
+    profiles: [single, cluster]
     build:
       context: ../..
       dockerfile: src/Flux.Gateway/Dockerfile
     image: flux-gateway:local
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
+    command: ["--migrate-only"]
+    restart: "no"
     environment:
-      # Development turns on migrate-on-startup, the demo merchants and the dev admin token
-      # (appsettings.Development.json). Production would refuse to seed the public dev keys.
       ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__Postgres: Host=postgres;Database=flux;Username=flux;Password=flux-local-dev
-      # Compose's internal DNS resolves service names, so the gateway reaches "payments:8080".
-      ReverseProxy__Clusters__payments__Destinations__d1__Address: http://payments:8080
-      ReverseProxy__Clusters__refunds__Destinations__d1__Address: http://refunds:8080
+      Database__MigrateOnStartup: "true"
+      Database__SeedDevData: "true"
     depends_on:
       postgres:
         condition: service_healthy
-      payments:
-        condition: service_started
-      refunds:
-        condition: service_started
+
+  gateway:
+    <<: *gateway
+    profiles: [single]
+    ports:
+      - "8080:8080"
+
+  gateway-1:
+    <<: *gateway
+    profiles: [cluster]
+  gateway-2:
+    <<: *gateway
+    profiles: [cluster]
+  gateway-3:
+    <<: *gateway
+    profiles: [cluster]
+
+  # Balances per *request* (L7), so consecutive requests on one keep-alive connection still
+  # rotate across the three gateways. A k8s Service balances per *connection* (L4), which can pin
+  # a load generator's traffic to one pod and hide experiment E1 (spec §21).
+  nginx:
+    image: nginx:1.30-alpine
+    profiles: [cluster]
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - gateway-1
+      - gateway-2
+      - gateway-3
+
+  # Load generator for the experiments: `docker compose … --profile bench run --rm k6 run /scripts/<name>.js`.
+  # Capped at 2 CPUs so it can't starve the system under test of the laptop's cores (spec §15).
+  k6:
+    image: grafana/k6:2.3.0
+    profiles: [bench]
+    cpus: 2
+    volumes:
+      - ../../bench/k6:/scripts:ro
+      - ../../bench/results:/results
 
 volumes:
   pgdata:

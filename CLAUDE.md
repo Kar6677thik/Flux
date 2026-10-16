@@ -30,5 +30,6 @@ Code comments explain *why*, not *what*. Keep them sparse; the depth belongs in 
 - Build: `dotnet build -c Release` (warnings fail the build). Test: `dotnet test` (xUnit v3 on Microsoft.Testing.Platform, opted in via `global.json`).
 - Run locally: `dotnet run --project src/Flux.Backend --launch-profile payments|refunds` (ports 5201/5202) and `dotnet run --project src/Flux.Gateway` (port 5100).
 - Containers: `docker compose -f deploy/compose/docker-compose.yml --profile single up --build` (gateway on :8080, PostgreSQL on 127.0.0.1:5433).
+- Three gateways behind nginx: `--profile cluster` (same :8080; `down` the other profile first). Experiments: `MSYS_NO_PATHCONV=1 docker compose -f deploy/compose/docker-compose.yml --profile bench run --rm k6 run --quiet /scripts/<script>.js`; see `bench/README.md`. Switch the algorithm with `FLUX_ALGORITHM=<name>` on `up`.
 - The gateway needs PostgreSQL. For `dotnet run`, start just the database: `docker compose -f deploy/compose/docker-compose.yml up -d postgres`.
 - Migrations: `dotnet tool restore`, then `dotnet ef migrations add <Name> --project src/Flux.Gateway --output-dir Data/Migrations`. Read the generated SQL (`dotnet ef migrations script`) before committing.
