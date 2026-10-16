@@ -17,7 +17,7 @@ A middleware is a function `(HttpContext, next) → Task`. It can:
 
 ```
 request ─▶ ExceptionHandler ─▶ CorrelationId ─▶ StripFluxHeaders ─▶ routing ─┬─▶ /healthz, /readyz, /admin/*
-                                                                             ├─▶ YARP route: Auth (M2) ─▶ [RateLimit M3] ─▶ UpstreamError ─▶ forward
+                                                                             ├─▶ YARP route: RouteGroup ─▶ Auth (M2) ─▶ RateLimit (M3) ─▶ UpstreamError ─▶ UpstreamTiming ─▶ forward
                                                                              └─▶ fallback 404
 ```
 *Updated in M2:* auth lives **inside YARP's own pipeline** (`MapReverseProxy(proxy => …)`), not in the main one. It therefore runs only after a public route has matched (spec §5: route match is step 3, auth step 4), and gateway endpoints never ask for a merchant key.
@@ -27,9 +27,11 @@ This is the Chain of Responsibility pattern, built into the framework.
 ## Why the order in Flux is what it is
 | Position | Middleware | Why here |
 |----------|-----------|----------|
+| 0 | `UseExceptionHandler` (M2) | Outermost, so an exception anywhere below becomes a `500 internal_error` Problem Details response, never a stack trace. |
+| 0′ | `RequestTelemetryMiddleware` (M3) | Starts the clock as early as possible and writes `Server-Timing` and the request metrics; see [metrics-and-cardinality](metrics-and-cardinality.md). |
 | 1 | `CorrelationIdMiddleware` | Everything after it, including error responses, needs the request id. |
 | 2 | `StripFluxHeadersMiddleware` | Must run **before** anything trusts `X-Flux-*`. If auth ran first and then something read a client-supplied `X-Flux-Merchant-Id`… game over. |
-| 0 | `UseExceptionHandler` (M2) | Outermost, so an exception anywhere below becomes a `500 internal_error` Problem Details response, never a stack trace. |
+| 2′ | `RouteGroupMiddleware` (M3), first in the YARP pipeline | Spec step 3: reads the matched route's group, so even a `401` can be labelled "payments". |
 | 3 | Auth (M2), in the YARP pipeline | Must know *who* before deciding *how much*. Placed after route matching, so `/v1/nope` is a `404`, not a `401`. |
 | 4 | Rate limit (M3), in the YARP pipeline | Needs the merchant from auth. It comes before forwarding, because a rejected request must never cost a backend anything. |
 | 5 | Endpoints: `/healthz`, `/readyz`, `/admin/*`, YARP forward, fallback | The actual work. `/admin/*` uses an *endpoint filter* for its token check. |

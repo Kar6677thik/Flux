@@ -7,7 +7,8 @@ namespace Flux.Gateway.IntegrationTests;
 /// <summary>Asserts the error contract from spec §7.4: status, Problem Details media type, code, request id.</summary>
 public static class Problems
 {
-    public static async Task AssertAsync(HttpResponseMessage response, HttpStatusCode status, string code)
+    /// <returns>The parsed body, because a test server's response stream can only be read once.</returns>
+    public static async Task<JsonElement> AssertAsync(HttpResponseMessage response, HttpStatusCode status, string code)
     {
         Assert.Equal(status, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
@@ -17,5 +18,6 @@ public static class Problems
         Assert.Equal(
             Assert.Single(response.Headers.GetValues("X-Request-Id")),
             problem.GetProperty("requestId").GetString());
+        return problem;
     }
 }

@@ -1,6 +1,7 @@
 using System.Data.Common;
 using Flux.Gateway.Data;
 using Flux.Gateway.Http;
+using Flux.Gateway.Observability;
 using Microsoft.Net.Http.Headers;
 
 namespace Flux.Gateway.Auth;
@@ -20,6 +21,7 @@ public sealed class ApiKeyAuthMiddleware(RequestDelegate next, ApiKeyAuthenticat
     {
         if (!TryReadKey(http.Request, out var key))
         {
+            http.SetOutcome(Outcomes.Unauthorized);
             http.Response.Headers.WWWAuthenticate = "Bearer realm=\"flux\"";
             await FluxProblems.WriteAsync(http, StatusCodes.Status401Unauthorized, "missing_api_key",
                 "Missing API key", "Send your key as 'Authorization: Bearer flux_...'.");
@@ -35,6 +37,7 @@ public sealed class ApiKeyAuthMiddleware(RequestDelegate next, ApiKeyAuthenticat
         {
             // ADR-0008: keys already in the cache keep working; only cache misses land here.
             logger.LogError(ex, "Key lookup failed for {keyPrefix}: database unavailable", ApiKey.PrefixOf(key));
+            http.SetOutcome(Outcomes.AuthUnavailable);
             http.Response.Headers.RetryAfter = "5";
             await FluxProblems.WriteAsync(http, StatusCodes.Status503ServiceUnavailable, "auth_unavailable",
                 "Authentication unavailable", "The key could not be checked right now. Retry shortly.");
@@ -44,6 +47,7 @@ public sealed class ApiKeyAuthMiddleware(RequestDelegate next, ApiKeyAuthenticat
         if (merchant is null)
         {
             logger.LogInformation("Rejected unknown or revoked key {keyPrefix}", ApiKey.PrefixOf(key));
+            http.SetOutcome(Outcomes.Unauthorized);
             http.Response.Headers.WWWAuthenticate = "Bearer realm=\"flux\", error=\"invalid_token\"";
             await FluxProblems.WriteAsync(http, StatusCodes.Status401Unauthorized, "invalid_api_key",
                 "Invalid API key", "The API key is unknown or has been revoked.");
@@ -60,6 +64,7 @@ public sealed class ApiKeyAuthMiddleware(RequestDelegate next, ApiKeyAuthenticat
         if (merchant.Status == MerchantStatus.Suspended)
         {
             logger.LogInformation("Rejected suspended merchant");
+            http.SetOutcome(Outcomes.Forbidden);
             await FluxProblems.WriteAsync(http, StatusCodes.Status403Forbidden, "merchant_suspended",
                 "Merchant suspended", "This merchant account is suspended.");
             return;
