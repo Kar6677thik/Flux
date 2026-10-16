@@ -34,8 +34,24 @@ public sealed class RateLimitMiddleware(
         }
 
         var started = time.GetTimestamp();
-        var decision = await limiter.TryAcquireAsync(new RateLimitKey(merchant.MerchantId, routeGroup), limit, http.RequestAborted);
-        metrics.LimiterDecision(limiter.Algorithm, time.GetElapsedTime(started));
+        RateLimitDecision decision;
+        try
+        {
+            decision = await limiter.TryAcquireAsync(new RateLimitKey(merchant.MerchantId, routeGroup), limit, http.RequestAborted);
+        }
+        catch (RateLimiterUnavailableException)
+        {
+            // Fail closed (ADR-0005): 503, not 429. The client did nothing wrong; our limiter can't answer.
+            http.SetOutcome(Outcomes.LimiterUnavailable);
+            http.Response.Headers.RetryAfter = "5";
+            await FluxProblems.WriteAsync(http, StatusCodes.Status503ServiceUnavailable, "rate_limiter_unavailable",
+                "Rate limiter unavailable", $"Requests on route group '{routeGroup}' are paused while the rate limiter recovers. Retry shortly.");
+            return;
+        }
+        finally
+        {
+            metrics.LimiterDecision(limiter.Algorithm, time.GetElapsedTime(started));
+        }
 
         // OnStarting, not "set now": the headers must land on the backend's response too, and YARP
         // copies the backend's headers over ours when it forwards. This runs after that copy.

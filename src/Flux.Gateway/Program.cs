@@ -27,10 +27,8 @@ builder.Services.AddOptions<AdminOptions>().BindConfiguration(AdminOptions.Secti
     .Validate(o => o.IsValid, $"Admin:Token must be at least {AdminOptions.MinTokenLength} characters, or unset to disable the admin API.")
     .ValidateOnStart();
 builder.Services.AddOptions<DatabaseOptions>().BindConfiguration(DatabaseOptions.SectionName);
-builder.Services.AddOptions<RateLimitingOptions>().BindConfiguration(RateLimitingOptions.SectionName)
-    .Validate(o => o.IsValid(out _), $"RateLimiting:Algorithm must be one of: {string.Join(", ", RateLimitingOptions.Algorithms)}; " +
-        "RateLimiting:FixedWindow:WindowSeconds must be between 1 and 3600.")
-    .ValidateOnStart();
+builder.Services.AddOptions<RateLimitingOptions>().BindConfiguration(RateLimitingOptions.SectionName).ValidateOnStart();
+builder.Services.AddSingleton<IValidateOptions<RateLimitingOptions>, RateLimitingOptionsValidator>();
 
 // By default minimal APIs throw on an unreadable body only in Development; elsewhere they answer
 // with a bare 400. Throwing everywhere sends both through the exception handler's Problem Details.
@@ -52,11 +50,23 @@ builder.Services.AddHostedService<PlanRefreshService>();
 // Strategy (spec §9.1): the algorithm is chosen by config, and callers only see IRateLimiter.
 builder.Services.AddSingleton<InMemoryTokenBucket>();
 builder.Services.AddSingleton<InMemoryFixedWindow>();
-builder.Services.AddSingleton<IRateLimiter>(sp => sp.GetRequiredService<IOptions<RateLimitingOptions>>().Value.Algorithm switch
+builder.Services.AddSingleton<RedisConnection>();
+builder.Services.AddSingleton<RedisTokenBucket>();
+builder.Services.AddSingleton<IRateLimiter>(sp =>
 {
-    InMemoryTokenBucket.Name => sp.GetRequiredService<InMemoryTokenBucket>(),
-    InMemoryFixedWindow.Name => sp.GetRequiredService<InMemoryFixedWindow>(),   // experiment E2 only
-    var other => throw new InvalidOperationException($"Unknown RateLimiting:Algorithm '{other}'."),
+    var options = sp.GetRequiredService<IOptions<RateLimitingOptions>>();
+    return options.Value.Algorithm switch
+    {
+        InMemoryTokenBucket.Name => sp.GetRequiredService<InMemoryTokenBucket>(),
+        InMemoryFixedWindow.Name => sp.GetRequiredService<InMemoryFixedWindow>(),   // experiment E2 only
+        // Decorator (spec §9.1): the same IRateLimiter, now with timeout, breaker and failure policy.
+        // Without it (experiment E3 only), a Redis failure surfaces as an exception and a 500.
+        RedisTokenBucket.Name when options.Value.Redis.UseResilience => new ResilientRateLimiter(
+            sp.GetRequiredService<RedisTokenBucket>(), options, sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<FluxMetrics>(), sp.GetRequiredService<ILogger<ResilientRateLimiter>>()),
+        RedisTokenBucket.Name => sp.GetRequiredService<RedisTokenBucket>(),
+        var other => throw new InvalidOperationException($"Unknown RateLimiting:Algorithm '{other}'."),
+    };
 });
 
 builder.Services.AddSingleton<FluxMetrics>();
@@ -67,6 +77,11 @@ builder.Services.AddOpenTelemetry().WithMetrics(metrics => metrics
 var app = builder.Build();
 
 await DatabaseStartup.RunAsync(app);
+
+// Create the limiter now rather than on the first request, so the Redis connection starts in the
+// background straight away (and a broken limiter configuration fails at startup).
+if (!args.Contains("--migrate-only"))
+    app.Services.GetRequiredService<IRateLimiter>();
 
 // "Migrate, seed, exit": Compose runs this once before any gateway starts, so three gateways
 // never race to migrate the same database (spec §17 has the same rule for production).

@@ -9,6 +9,7 @@ These are the words used across Flux docs and code. The list grows with every mi
 | **API key** | A long random secret that identifies a merchant. Flux stores only its SHA-256 hash. | M2 |
 | **Assembly fixture** | An xUnit v3 fixture shared by every test in a test project. Flux uses one to start a single PostgreSQL container per test run. | M2 |
 | **Authentication vs. authorization** | *Authentication* proves who the caller is (bad key → `401`). *Authorization* decides what they may do (suspended → `403`). | M2 |
+| **Backlog (Redis client)** | Commands StackExchange.Redis holds while disconnected. The default queues them until reconnect or timeout; Flux uses `FailFast` (E3 showed why). | M5 |
 | **Bucket** | The state of one `(merchant, route group)` pair: how many tokens are left and when they were last refilled. | M3 |
 | **Burst capacity (`B`)** | The most tokens a bucket can hold, which is also the most requests allowed in one instant. | M3 |
 | **Cache penetration** | Lookups for data that doesn't exist always miss the cache and hit the database. Negative caching reduces it for *repeated* keys. | M2 |
@@ -28,11 +29,15 @@ These are the words used across Flux docs and code. The list grows with every mi
 | **Design-time factory** | `IDesignTimeDbContextFactory`: tells `dotnet ef` how to build the DbContext without starting the app. | M2 |
 | **Dropped iterations** | Iterations k6 was scheduled to start but couldn't (it ran out of VUs). Non-zero means the run didn't apply the load it claims. | M4 |
 | **EF Core migration** | A generated, committed C# file describing one schema change; `__EFMigrationsHistory` records which ones a database has run. | M2 |
+| **EVALSHA** | Running a Redis script by its SHA-1 hash instead of resending its text. Redis replies `NOSCRIPT` if it has forgotten it. | M5 |
+| **Fail fast** | Reporting an error immediately when success is already known to be impossible, rather than waiting for a timeout. | M5 |
 | **Fail open / fail closed** | When a safety check can't run, *open* lets traffic through and *closed* blocks it. | M5 |
 | **FakeTimeProvider** | A `TimeProvider` whose clock moves only when a test calls `Advance()`, so TTLs are tested without sleeping. | M2 |
 | **Fallback limiter** | The per-instance in-memory bucket used for `payments` while Redis is unavailable. | M5 |
 | **Fixed window** | A limiter that counts requests per calendar slot (e.g. per 10 s). It can be gamed at slot boundaries. | M4 |
 | **GHCR** | GitHub Container Registry, where CI pushes Flux's images. | M7 |
+| **Half-open** | The circuit-breaker state after the break duration, when exactly one trial call is let through to test the dependency. | M5 |
+| **Hash (Redis)** | A Redis value holding field → value pairs, like a small dictionary. One rate-limit bucket = one hash (`tokens`, `ts`). | M5 |
 | **Hash tag (Redis)** | The `{…}` part of a Redis key. In Redis Cluster, only that part decides which node owns the key. | M5 |
 | **Histogram (metrics)** | A metric that counts observations into buckets (`le="0.001"`). Percentiles are estimated from the buckets, so the boundaries set the precision. | M3 |
 | **k3s** | A lightweight Kubernetes distribution. It already runs on Megatron. | M7 |
@@ -42,6 +47,7 @@ These are the words used across Flux docs and code. The list grows with every mi
 | **Launch profile** | A named way to `dotnet run` a project (port, environment variables), stored in `Properties/launchSettings.json`. It only affects `dotnet run`, never containers. | M1 |
 | **Lazy refill** | Computing the tokens earned since the last request when a bucket is read, instead of adding them on a timer. | M3 |
 | **Liveness / readiness** | *Liveness*: should this process be restarted? *Readiness*: should it receive traffic right now? | M1 |
+| **Lost update** | Two read-modify-write sequences interleave, and one write silently overwrites the other's. | M5 |
 | **Lua script (Redis)** | A small program Redis runs atomically. No other command runs while it executes. | M5 |
 | **Megatron** | The home server (on the tailnet at 100.91.115.46). | M7 |
 | **Merchant** | A tenant: a business calling the payments API. It has one plan and one or more API keys. | M2 |
@@ -51,6 +57,7 @@ These are the words used across Flux docs and code. The list grows with every mi
 | **Migration bundle** | A self-contained executable, built by `dotnet ef migrations bundle`, that applies migrations. M7 runs it as a k8s Job. | M7 |
 | **Monotonic clock** | A clock that only moves forward and never jumps when the wall clock is corrected (`TimeProvider.GetTimestamp`). Used for elapsed time. | M3 |
 | **Multi-stage build** | A Dockerfile with a heavy build stage and a slim runtime stage. Only the compiled output is copied into the final image. | M1 |
+| **Multiplexer (Redis)** | StackExchange.Redis's single shared connection object, which pipelines every caller's commands over one socket. One per process. | M5 |
 | **Negative caching** | Caching "this key does not exist", so floods of bad keys don't each reach the database. | M2 |
 | **Noisy neighbour** | One tenant whose heavy traffic degrades service for other tenants. | M6 |
 | **OpenTelemetry** | The vendor-neutral standard (and SDKs) for metrics, traces and logs. Flux uses its Prometheus exporter. | M3 |
@@ -71,10 +78,12 @@ These are the words used across Flux docs and code. The list grows with every mi
 | **Tailnet** | Your private Tailscale network. Only your devices can reach services exposed on it. | M7 |
 | **Tenant** | One customer in a shared (multi-tenant) system. In Flux, a merchant. | M2 |
 | **Testcontainers** | A library that starts real dependencies (PostgreSQL, Redis) in throwaway Docker containers for tests. | M2 |
+| **Thundering herd** | Many waiting requests released at the same moment, overwhelming whatever they hit. E3's post-recovery burst. | M5 |
 | **Time series** | One metric name plus one exact set of label values, stored as a sequence of samples. Every new label value creates a new series. | M3 |
 | **Token bucket** | A limiter in which requests spend tokens and tokens refill at a steady rate, up to a cap. | M3 |
 | **TTL (time to live)** | How long a cached entry is trusted before it must be looked up again. In Flux it is also the worst-case delay for a revocation. | M2 |
 | **UUIDv7** | A UUID whose first bits are a timestamp, so new ids sort by creation time and index inserts stay at the end of the index (`Guid.CreateVersion7`). | M2 |
+| **Valkey** | The open-source fork of Redis created after Redis's 2024 licence change. Protocol-compatible. | M5 |
 | **Virtual user (VU)** | One concurrent k6 worker running the script's default function. | M4 |
 | **`WWW-Authenticate`** | The header a `401` must include, telling the client which authentication scheme to use (`Bearer`). | M2 |
 | **YARP** | "Yet Another Reverse Proxy": Microsoft's reverse-proxy library for ASP.NET Core. | M1 |

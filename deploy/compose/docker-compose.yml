@@ -7,8 +7,11 @@
 #   cluster  three gateways behind nginx (L7 round-robin)    (M4)
 #   bench    k6 load generator, run on demand                (M4; see bench/README.md)
 #
-# The rate-limiting algorithm comes from the shell, so experiments can switch it without edits:
-#   FLUX_ALGORITHM=InMemoryFixedWindow docker compose … up -d
+# Experiments switch behaviour from the shell, never by editing this file:
+#   FLUX_ALGORITHM=RedisTokenBucket|InMemoryTokenBucket|InMemoryFixedWindow   (default InMemoryTokenBucket)
+#   FLUX_REDIS_RESILIENCE=false  FLUX_REDIS_TIMEOUT_MS=5000                   (experiment E3 only)
+#   FLUX_ASSUMED_INSTANCES=1                                                   (fail-open share; default 3)
+#   e.g.  FLUX_ALGORITHM=RedisTokenBucket docker compose … --profile cluster up -d
 #
 # The backends publish no ports. From your machine the only way in is through the gateway,
 # which is the same isolation the k3s NetworkPolicy gives us on the server (spec N6).
@@ -38,6 +41,10 @@ x-gateway: &gateway
     Database__MigrateOnStartup: "false"
     Database__SeedDevData: "false"
     RateLimiting__Algorithm: ${FLUX_ALGORITHM:-InMemoryTokenBucket}
+    ConnectionStrings__Redis: redis:6379
+    RateLimiting__Redis__TimeoutMs: ${FLUX_REDIS_TIMEOUT_MS:-50}
+    RateLimiting__Redis__UseResilience: ${FLUX_REDIS_RESILIENCE:-true}
+    RateLimiting__Fallback__AssumedInstances: ${FLUX_ASSUMED_INSTANCES:-3}
     # Compose's internal DNS resolves service names, so a gateway reaches "payments:8080".
     ReverseProxy__Clusters__payments__Destinations__d1__Address: http://payments:8080
     ReverseProxy__Clusters__refunds__Destinations__d1__Address: http://refunds:8080
@@ -67,6 +74,16 @@ services:
       interval: 2s
       timeout: 3s
       retries: 30
+
+  # Shared token buckets (M5). No persistence on purpose: Redis is not a source of truth, and
+  # losing it only resets limits (spec §4). Gateways don't wait for it, because they must start
+  # and serve, degraded, without it (spec §9.5). 6380 on the host avoids a native Redis on 6379.
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:6380:6379"
 
   payments:
     <<: *backend

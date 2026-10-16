@@ -26,8 +26,8 @@ These docs record **what** was built, **why** it was built that way, and **when*
 | [02 — Tenancy & auth](journal/02-tenancy-auth.md) | M2 | ✅ Done, in review |
 | [03 — In-memory token bucket](journal/03-token-bucket.md) | M3 | ✅ Done, in review |
 | [04 — Break it](journal/04-break-it.md) | M4 | ✅ Done, in review |
-| 05 — Redis + resilience | M5 | Next |
-| 06 — Prove it | M6 | |
+| [05 — Redis + resilience](journal/05-redis-resilience.md) | M5 | ✅ Done, in review |
+| 06 — Prove it | M6 | Next |
 | 07 — Deploy | M7 | |
 
 | ADR | Decision |
@@ -41,6 +41,7 @@ These docs record **what** was built, **why** it was built that way, and **when*
 | [0007](adr/0007-one-fake-backend-image.md) | One fake-backend codebase run as two services |
 | [0008](adr/0008-auth-when-postgres-is-down.md) | PostgreSQL down → cached keys keep working, uncached keys get `503 auth_unavailable` |
 | [0009](adr/0009-metrics-system-diagnostics-otel-prometheus.md) | Metrics: `System.Diagnostics.Metrics` + OpenTelemetry's Prometheus exporter |
+| [0010](adr/0010-resilience-polly-fail-fast-client.md) | Resilience via Polly v8, a fail-fast Redis client, and "unrequested cancellation = failure" |
 
 | Concept note | Milestone |
 |--------------|-----------|
@@ -61,8 +62,15 @@ These docs record **what** was built, **why** it was built that way, and **when*
 | [Load balancing (L4 vs. L7) and shared state](concepts/load-balancing.md) | M4 |
 | [Load testing with k6](concepts/load-testing-with-k6.md) | M4 |
 | [Coordinated omission](concepts/coordinated-omission.md) | M4 |
+| [Redis basics (for a rate limiter)](concepts/redis-basics.md) | M5 |
+| [Atomicity with Lua scripts](concepts/lua-atomicity.md) | M5 |
+| [Clock skew](concepts/clock-skew.md) | M5 |
+| [Timeouts and circuit breakers](concepts/timeouts-and-circuit-breakers.md) | M5 |
+| [Fail open vs. fail closed](concepts/fail-open-vs-fail-closed.md) | M5 |
 
 | Report | Result |
 |--------|--------|
 | [E1 — per-instance buckets](reports/E1-per-instance-buckets.md) | 3 gateways allowed **2.99×** the limit (1 gateway: 1.00×) |
 | [E2 — fixed-window boundary](reports/E2-fixed-window-boundary.md) | **200 of 200** allowed in ~235 ms across a boundary (token bucket: 10–12) |
+| [E3 — Redis outage, default timeouts](reports/E3-redis-outage-default-timeouts.md) | requests hang **~5.5 s**, then `500`; afterwards **138 + 30 false `429`s** |
+| [P4 — Redis outage, resilient](reports/P4-redis-outage-resilient.md) | payments **100% served** (degraded, normal latency), refunds `503` in **~1.1 ms**, recovery **~4.5 s**; N4 met (one caveat) |

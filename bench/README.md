@@ -6,6 +6,9 @@ Every experiment in spec §15 has a script here and a report in [`docs/reports/`
 |--------|-----------|-------|
 | [`k6/e1-instances.js`](k6/e1-instances.js) | E1: 3 gateways with in-memory buckets → ~3× the limit | `cluster` profile (baseline: `single`) |
 | [`k6/e2-boundary.js`](k6/e2-boundary.js) | E2: the fixed window's boundary burst | `single` profile with `FLUX_ALGORITHM=InMemoryFixedWindow` |
+| [`k6/redis-outage.js`](k6/redis-outage.js) via [`run-outage.sh`](run-outage.sh) | E3 and P4: steady traffic while Redis is stopped (`stop`) or frozen (`pause`) for ~20 s | `single` profile with `FLUX_ALGORITHM=RedisTokenBucket` (E3: also `FLUX_REDIS_RESILIENCE=false FLUX_REDIS_TIMEOUT_MS=5000`) |
+
+`run-outage.sh <label> [stop|pause]` starts the k6 run, breaks Redis at +20 s, heals it about 20 s later, records both instants in `bench/results/<label>-events.txt`, then runs [`analyze_outage.py`](analyze_outage.py). That script uses only the standard library: it places each request in a phase by the moment it was *sent*, and prints the per-phase table and per-second timeline used in the reports.
 
 ## Running one
 ```bash
