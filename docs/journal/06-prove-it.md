@@ -105,4 +105,4 @@ Run P2 again with `NOISY_RATE=0`, and P3 with `TARGET=direct`, for the compariso
 ## Next: M7 — Deploy
 - k3s manifests (Kustomize) for the `flux` namespace, a NetworkPolicy, and the migration Job before the rollout.
 - `deploy.yml`: build → push images to GHCR → Tailscale → `flux-deploy` sudo helper → smoke test.
-- **Steps only you can do** (spec §17): GitHub secrets, a deploy key, installing the sudo helper, Tailscale Serve on `:8443`. M7 will list each with exact commands.
+- **Steps only you can do** (spec §17): GitHub secrets, a deploy key, installing the sudo helper, publishing the API with Tailscale Serve. M7 will list each with exact commands.

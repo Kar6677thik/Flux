@@ -19,6 +19,17 @@ permissions:
   contents: read
 
 jobs:
+  # The repo is public: fail if anything names the private home-server setup (IPs, hostnames,
+  # server paths, usernames). Docs describe that setup generically instead.
+  confidential:
+    name: No private infrastructure details
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan tracked files
+        run: python3 -I scripts/check-confidential.py
+
   test:
     name: Build and test
     runs-on: ubuntu-latest
@@ -43,7 +54,7 @@ jobs:
 
   images:
     name: Build container images
-    needs: test
+    needs: [test, confidential]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # Least privilege per job: only this job may write packages, and it only pushes from main.

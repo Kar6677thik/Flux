@@ -45,7 +45,7 @@ push / PR ─▶ job "test":   checkout → setup .NET (from global.json) → re
 ## Alternatives
 | Option | Trade-off |
 |--------|-----------|
-| Self-hosted runner on Megatron | No SSH step for deploys, but it runs code from a **public** repo on your home server (ADR-0006). |
+| Self-hosted runner on the home server | No SSH step for deploys, but it runs code from a **public** repo on your home server (ADR-0006). |
 | GitLab CI, Jenkins, Azure Pipelines | Same concepts; Actions lives next to the code you already host on GitHub. |
 | Git pre-commit hooks only | Easy to skip, and they run on your machine, not a clean one. |
 

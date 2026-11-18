@@ -4,7 +4,7 @@
 > Code: [`deploy/compose/nginx.conf`](../../deploy/compose/nginx.conf), [`deploy/compose/docker-compose.yml`](../../deploy/compose/docker-compose.yml) (`cluster` profile) · Experiment: [E1](../reports/E1-per-instance-buckets.md)
 
 ## Problem
-One gateway is a single point of failure and has a capacity ceiling, so production runs several (3 on Megatron). But anything a gateway keeps **in its own memory** (rate-limit buckets, caches) is now one of three copies, each seeing a third of the traffic. E1 measured what that does to a per-merchant limit: **2.99×**.
+One gateway is a single point of failure and has a capacity ceiling, so production runs several (3 planned for the home server). But anything a gateway keeps **in its own memory** (rate-limit buckets, caches) is now one of three copies, each seeing a third of the traffic. E1 measured what that does to a per-merchant limit: **2.99×**.
 
 ## Context
 Every horizontally scaled service has this split:

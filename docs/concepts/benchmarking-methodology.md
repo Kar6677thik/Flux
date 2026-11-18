@@ -26,7 +26,7 @@ Every claim in Flux's README traces back to a report in `docs/reports/`. This no
 
 ## Alternatives
 - **Microbenchmarks** (BenchmarkDotNet) for one function in isolation, such as the token-bucket maths: precise, but they say nothing about the system. Flux's question was always "what does the *system* do?".
-- **Production measurement** (real traffic, real hardware): the ultimate truth, available after M7. P1–P4 can optionally be rerun on Megatron (spec §22).
+- **Production measurement** (real traffic, real hardware): the ultimate truth, available after M7. P1–P4 can optionally be rerun on the home server (spec §22).
 
 ## Trade-offs
 - **Laptop numbers include WSL2 virtualisation**, a shared CPU with k6, and Windows power management. That's fine for comparisons and wrong for capacity planning.
