@@ -8,8 +8,8 @@
 1. Read the project brief (Project 1 in *10 Engineering Projects*) and the Field Guide sections it points to (7, 8, 15, 17, 25).
 2. Took stock of the environment before designing anything:
    - **Laptop:** .NET SDK 10.0.401, Docker Desktop (installed but not running), Python 3.12 and `gh`, logged in. k6 is not installed, so we'll run it from its Docker image.
-   - **Megatron (home server):** 8 cores, 7.6 GiB RAM, **83% disk used**. k3s v1.36 is running; there is no Docker. Tailscale Serve already maps `:443/` to Slate.
-   - **Slate's existing CI/CD** (`slate.lib/.github/workflows/*.yml`) already deploys to this same k3s using GitHub Actions + Tailscale + SSH + a narrow sudo helper. That is a proven pattern to copy.
+   - **The home server:** a single-node k3s server, 8 cores, 8 GB RAM, with its disk **nearly full**. There is no Docker. Tailscale Serve already publishes another project on the tailnet.
+   - **Another project's existing CI/CD** already deploys to this same k3s using GitHub Actions + Tailscale + SSH + a narrow sudo helper. That is a proven pattern to copy.
    - **The Flux GitHub repo is public.** That shapes how we handle secrets and dev keys.
 3. Resolved the ambiguities in the brief and wrote down every decision: [spec.md](../spec.md) plus seven [ADRs](../adr/).
 
@@ -17,7 +17,7 @@
 | Question | Your answer |
 |----------|-------------|
 | Who writes the code? | Claude builds in milestones; the docs teach; you review each milestone |
-| How should it run on the server? | k3s, like Slate |
+| How should it run on the server? | k3s, like the other project |
 | Who can reach it? | Tailnet only |
 
 ## Decisions I made (each one can still be changed; reasons in the linked ADR or spec section)
@@ -32,7 +32,7 @@
 | Which status code when the limiter itself is down | `503`, not `429`: the client did nothing wrong | ADR-0005 |
 | Should readiness check Redis? | **No.** Otherwise a Redis outage takes every gateway out of rotation. | Spec §11.2 |
 | How to measure "latency the gateway adds" | Two independent ways: direct vs. through the gateway, and a `Server-Timing` header | Spec §11.2, P3 |
-| Where the official benchmark numbers come from | Laptop Docker Compose, specs recorded; optional rerun on Megatron | Spec §15 |
+| Where the official benchmark numbers come from | Laptop Docker Compose, specs recorded; optional rerun on the home server | Spec §15 |
 | How to load-balance across 3 instances on k3s | A k8s Service, but the 3× demo runs locally behind nginx, because L4 balancing can hide the bug | Spec §21 |
 | What the "two backend services" are | One stateless fake codebase, run as two services | ADR-0007 |
 | How migrations run in production | A separate Job before rollout, not on gateway startup | Spec §17 |
@@ -44,7 +44,7 @@
 - **§34, Speculative Generalization:** the non-goals list (spec §3) is equally important. It stops the project growing until it never finishes.
 
 ## Things this run uncovered that you need to know now
-1. **Megatron's disk is 83% full.** Kubernetes starts garbage-collecting images at 85% and can evict pods near there. That threatens **Slate** too, not just Flux. Free some space before M7 (target ≥ 30% free).
+1. **The home server's disk is nearly full.** Kubernetes starts garbage-collecting images at 85% and can evict pods near there. That threatens **the other project** too, not just Flux. Free some space before M7 (target ≥ 30% free).
 2. **Some deployment steps need your hands:** sudo, GitHub secrets and the Tailscale admin. They are listed in spec §17, so M7 holds no surprises.
 3. **Naming clash:** "Flux CD" is a well-known GitOps tool. If you ever mention Flux on your résumé, say "Flux (API gateway)" to avoid confusion.
 

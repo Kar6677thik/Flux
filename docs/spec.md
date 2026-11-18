@@ -429,21 +429,21 @@ Each experiment has a hypothesis, a reproducible command and a report in `docs/r
 |-------------|-----------|-----|
 | **Local** | PostgreSQL, Redis, payments, refunds, and 1 gateway (`single` profile) or 3 gateways + nginx (`cluster` profile). k6 on demand (`bench` profile). *Since M4:* a one-shot `migrate` service (the gateway image with `--migrate-only`) migrates and seeds before any gateway starts. | `docker compose --profile <p> up`. The gateway can also run from the IDE with `dotnet run` against Compose's databases. |
 | **CI** | GitHub-hosted Ubuntu runners | Build → unit + integration tests (Testcontainers) → build images → push to GHCR on `main` → deploy |
-| **Home server** | k3s namespace `flux` on Megatron | Deployed only by GitHub Actions (§17) |
+| **Home server** | k3s namespace `flux` on the home server | Deployed only by GitHub Actions (§17) |
 
 ## 17. Deployment design (not implemented: superseded by [ADR-0011](adr/0011-no-home-server-deploy-publish-images.md))
 
-> *Decided 2026-10-16, before M7 began:* Flux isn't deployed to Megatron. A tailnet-only deployment would be invisible to anyone else, a public one would be risky, and the repo's measured results are the better showcase. M7 instead publishes images to GHCR, with a compose override and a recorded demo. The design below is kept as a worked plan for if Kubernetes practice becomes the goal.
+> *Decided 2026-10-16, before M7 began:* Flux isn't deployed to the home server. A tailnet-only deployment would be invisible to anyone else, a public one would be risky, and the repo's measured results are the better showcase. M7 instead publishes images to GHCR, with a compose override and a recorded demo. The design below is kept as a worked plan for if Kubernetes practice becomes the goal.
 
-This follows the same pattern Slate already uses successfully ([ADR-0006](adr/0006-deploy-k3s-actions-tailscale.md)).
+This follows the same pattern another project on the server already uses successfully ([ADR-0006](adr/0006-deploy-k3s-actions-tailscale.md)).
 
 ```mermaid
 flowchart LR
     Dev["git push main"] --> CI["GitHub Actions<br/>build + test"]
     CI --> GHCR["ghcr.io/kar6677thik/flux-*:&lt;sha&gt;"]
-    CI -->|"tailscale/github-action (tag:ci)"| TS["Tailnet"]
-    TS -->|"scp bundle + ssh"| S["Megatron"]
-    S -->|"sudo -n /usr/local/sbin/flux-deploy"| K["k3s namespace flux"]
+    CI -->|"tailscale/github-action (CI tag)"| TS["Tailnet"]
+    TS -->|"scp bundle + ssh"| S["Home server"]
+    S -->|"sudo -n deploy helper"| K["k3s namespace flux"]
     K -.->|"pull image"| GHCR
 ```
 
@@ -462,20 +462,20 @@ flowchart LR
 **Process details:**
 - **Migrations:** a separate EF Core migration-bundle Job runs **before** the gateway rollout. If all 3 replicas migrated on startup, they would race each other, and the schema would be changed from inside the request-serving process (Field Guide §22.21).
 - **Secrets:** GitHub Actions secrets → a Kubernetes Secret manifest rendered in the runner's temp folder → applied by the helper → deleted. Nothing secret is committed, and nothing is changed by hand on the server.
-- **Exposure:** tailnet only. Tailscale Serve HTTPS on its **own port** (planned: `:8443`) → gateway NodePort. Slate keeps `/` on `:443`.
+- **Exposure:** tailnet only. Tailscale Serve publishes the API on the tailnet on its **own port**, forwarding to the gateway NodePort. The other project keeps its existing mapping.
 - **Smoke test:** after deploying, the workflow calls `/readyz` and makes one authenticated request with a smoke-test merchant key.
 
 **One-time steps only you can do** (we need sudo or account access; listed now so they're not a surprise):
 
-1. ✅ **Free disk on Megatron.** *Done 2026-10-15: `/` is now 59% used (51 GB free).* It was 83% full. Kubelet's default image garbage collection starts at 85% and eviction at 85–90%, which could evict pods, **including Slate's**. Aim for ≥ 30% free before M7.
+1. ✅ **Free disk on the home server.** *Done 2026-10-15.* It was nearly full. Kubelet's default image garbage collection starts at 85% and eviction at 85–90%, which could evict pods, **including the other project's**. Aim for ≥ 30% free before M7.
 2. **Add GitHub secrets to the Flux repo:**
-   - `TS_OAUTH_CLIENT_ID` and `TS_OAUTH_SECRET` (Slate's `tag:ci` client can be reused)
+   - `TS_OAUTH_CLIENT_ID` and `TS_OAUTH_SECRET` (the other project's CI OAuth client can be reused)
    - `HOME_SERVER_HOST`, `HOME_SERVER_USER`, `HOME_SERVER_KNOWN_HOSTS`
    - `HOME_SERVER_SSH_KEY` (a **new** key for Flux)
    - `FLUX_POSTGRES_PASSWORD`, `FLUX_ADMIN_TOKEN`, `FLUX_SMOKE_API_KEY`
-3. **Authorise the deploy key:** add the new key's public half to `~/.ssh/authorized_keys` on Megatron.
-4. **Install the deploy helper:** review and install `/usr/local/sbin/flux-deploy` plus one `sudoers` line (written in M7).
-5. **Expose the gateway:** run `tailscale serve --bg --https=8443 http://127.0.0.1:<nodeport>` once.
+3. **Authorise the deploy key** for the dedicated deploy user on the home server.
+4. **Install the deploy helper:** review and install the root-owned helper plus one `sudoers` line (written in M7).
+5. **Expose the gateway:** publish the gateway's NodePort with `tailscale serve` once, on its own HTTPS port.
 
 ## 18. Repository layout (target)
 
@@ -565,4 +565,4 @@ Each milestone is a branch (`m<N>-<slug>`) and a pull request into `main`. Nothi
 | ~~Metrics library: OpenTelemetry Prometheus exporter or `prometheus-net`~~ | ✅ M3: `System.Diagnostics.Metrics` instruments + the OpenTelemetry Prometheus exporter, pinned beta ([ADR-0009](adr/0009-metrics-system-diagnostics-otel-prometheus.md)) |
 | ~~Free NodePort and final Tailscale Serve port~~ | Not needed: no deployment (ADR-0011) |
 | ~~Whether GHCR packages need to be made public manually~~ | ✅ M7: yes, once per package, in its settings (ADR-0011) |
-| ~~Whether to rerun the experiments on Megatron~~ | No: there's no deployment there (ADR-0011) |
+| ~~Whether to rerun the experiments on the home server~~ | No: there's no deployment there (ADR-0011) |

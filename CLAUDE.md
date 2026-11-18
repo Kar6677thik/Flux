@@ -17,10 +17,12 @@ Every milestone must add or update:
 
 Code comments explain *why*, not *what*. Keep them sparse; the depth belongs in the docs.
 
-## Home server (Megatron, `ssh kar_thik@100.91.115.46`)
+## Home server
+Connection details are kept privately by the owner, never in this public repo.
 - **Flux is not deployed there** ([ADR-0011](docs/adr/0011-no-home-server-deploy-publish-images.md)); M7 became a showcase (GHCR images + recorded demo). The rules below still apply to any inspection.
 - **Read-only inspection only.** No destructive commands. No manual deployment: deploys go through GitHub Actions only.
-- k3s runs there and also hosts Slate. Don't touch the `slate` namespace or Tailscale Serve's `/` mapping.
+- k3s runs there and also hosts other projects. Don't touch their namespaces or the existing Tailscale Serve mapping.
+- Never commit IPs, tailnet hostnames, ports, server paths, usernames or similar identifiers of the private setup. CI's `confidential` job enforces this (`python -I scripts/check-confidential.py`).
 
 ## Conventions
 - .NET 10, nullable enabled, warnings as errors.

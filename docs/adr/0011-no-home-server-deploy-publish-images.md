@@ -3,20 +3,20 @@
 - **Status:** Accepted
 - **Date:** 2026-10-16
 - **Milestone:** M7
-- **Supersedes:** [ADR-0006](0006-deploy-k3s-actions-tailscale.md) (deploy to k3s on Megatron via GitHub Actions, Tailscale and a sudo helper)
+- **Supersedes:** [ADR-0006](0006-deploy-k3s-actions-tailscale.md) (deploy to k3s on the home server via GitHub Actions, Tailscale and a sudo helper)
 
 ## Context
-ADR-0006 planned M7 as an automated deployment to k3s on Megatron, reachable on the tailnet only. Before starting M7, the owner asked whether that deployment is worth doing at all: can it be shown to anyone, does Flux have anything to look at, and would it impress? Looking at it after M6:
+ADR-0006 planned M7 as an automated deployment to k3s on the home server, reachable on the tailnet only. Before starting M7, the owner asked whether that deployment is worth doing at all: can it be shown to anyone, does Flux have anything to look at, and would it impress? Looking at it after M6:
 - **Nobody else could reach it.** Tailnet-only means only the owner's devices can. Recruiters and interviewers would never see it.
-- **Making it public would be a mistake.** It's a rate limiter on a home server that also hosts Slate, and the Development dev keys are published in the repo. Internet exposure invites exactly the abuse it's built to absorb, for a URL that only says `401 missing_api_key` to strangers.
+- **Making it public would be a mistake.** It's a rate limiter on a home server that also hosts another project, and the Development dev keys are published in the repo. Internet exposure invites exactly the abuse it's built to absorb, for a URL that only says `401 missing_api_key` to strangers.
 - **There's no frontend.** Flux is an API gateway; its output is status codes, headers and metrics.
 - **What already demonstrates the work** is in the repo: seven experiments with measured numbers, bugs found by those experiments, ADRs, and the documentation.
 - **It costs the shared machine and the owner's time:**
-  - **the machine:** 3 gateways + PostgreSQL + Redis on a 7.6 GiB server shared with Slate, with a small eviction risk;
+  - **the machine:** 3 gateways + PostgreSQL + Redis on an 8 GB server shared with another project, with a small eviction risk;
   - **the owner's time:** five manual one-time steps (GitHub secrets, a deploy key, a sudo helper, Tailscale Serve), plus maintenance afterwards.
 
 ## Decision
-**Flux is not deployed to Megatron.** M7 instead makes the project easy to *see* and *run*:
+**Flux is not deployed to the home server.** M7 instead makes the project easy to *see* and *run*:
 1. **CI publishes both images to GHCR** on every push to `main`, tagged `sha-<commit>` (immutable) and `latest`. Pull requests still only build.
 2. **`docker-compose.ghcr.yml`**, an override that runs the whole system from those images. Anyone with Docker can run it, without the .NET SDK or a build.
 3. **A recorded terminal demo** (`docs/images/demo.svg`, generated from `bench/demo.sh`). In about 30 s it shows auth, rate limiting, a live Redis outage with fail-open payments and fail-closed refunds, and automatic recovery. Every value in it is a real response.
@@ -35,7 +35,7 @@ ADR-0006 planned M7 as an automated deployment to k3s on Megatron, reachable on 
 - Spec goal **G8** (automatic deployment to the home server) and target **N5** (namespace memory and disk) are dropped. They're marked superseded in the spec, not deleted.
 - The deployment design in spec §17 and ADR-0006 stay in the repo as a worked design that was never built. ADR-0006 is marked superseded.
 - **GHCR packages start private** on first publish. The owner has to make `flux-gateway` and `flux-backend` public once (package settings → *Change visibility*); until then, only the owner can pull them.
-- There's no server to keep running, and nothing on Megatron changes.
+- There's no server to keep running, and nothing on the home server changes.
 
 ## Revisit when
 - Kubernetes and continuous-deployment practice becomes the goal in itself. ADR-0006 and spec §17 are a ready plan.

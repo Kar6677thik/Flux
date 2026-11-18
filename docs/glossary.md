@@ -46,7 +46,7 @@ These are the words used across Flux docs and code. The list grows with every mi
 | **Hash tag (Redis)** | The `{…}` part of a Redis key. In Redis Cluster, only that part decides which node owns the key. | M5 |
 | **Histogram (metrics)** | A metric that counts observations into buckets (`le="0.001"`). Percentiles are estimated from the buckets, so the boundaries set the precision. | M3 |
 | **Immutable tag** | An image tag that always refers to the same build (`sha-<commit>`), unlike a moving tag such as `latest`. | M7 |
-| **k3s** | A lightweight Kubernetes distribution. It runs on Megatron; Flux was planned for it but not deployed (ADR-0011). | M7 |
+| **k3s** | A lightweight Kubernetes distribution. It runs on the home server; Flux was planned for it but not deployed (ADR-0011). | M7 |
 | **Keep-alive** | Reusing one TCP connection for many HTTP requests. Matters for L4 balancing, which balances connections rather than requests. | M4 |
 | **Key prefix** | The first 12 characters of an API key (`flux_devQuie`). Not secret: safe to log and display. | M2 |
 | **L4 / L7 load balancing** | L4 balances TCP *connections*; L7 understands HTTP and balances *requests*. | M4 |
@@ -56,7 +56,7 @@ These are the words used across Flux docs and code. The list grows with every mi
 | **Load shedding** | Deliberately refusing excess work early and cheaply under overload, so the system keeps serving what it accepts. | M6 |
 | **Lost update** | Two read-modify-write sequences interleave, and one write silently overwrites the other's. | M5 |
 | **Lua script (Redis)** | A small program Redis runs atomically. No other command runs while it executes. | M5 |
-| **Megatron** | The home server (on the tailnet at 100.91.115.46). | M7 |
+| **Home server** | The owner's single-node k3s machine, reached over the tailnet. Flux isn't deployed there (ADR-0011). | M7 |
 | **Merchant** | A tenant: a business calling the payments API. It has one plan and one or more API keys. | M2 |
 | **MeterListener** | The .NET mechanism that receives measurements from `Meter` instruments. It is process-wide, which matters when one test process hosts several gateways. | M3 |
 | **Microsoft.Testing.Platform (MTP)** | The test runner `dotnet test` uses in .NET 10 (replacing VSTest). xUnit v3 test projects are executables that include it. | M1 |

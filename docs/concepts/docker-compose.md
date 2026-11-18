@@ -7,7 +7,7 @@
 "It works on my machine": different .NET versions, missing environment variables, a port already in use. Running 5+ processes by hand (2 backends, gateways, later PostgreSQL, Redis and nginx) is error-prone, and the server doesn't even have .NET installed.
 
 ## Context
-Flux runs the same artefact in three places: your laptop (Compose), CI (GitHub runner), and Megatron (k3s). A container image is that artefact.
+Flux runs the same artefact in three places: your laptop (Compose), CI (GitHub runner), and the home server (k3s). A container image is that artefact.
 
 ## Solution
 - **Image**: a filesystem snapshot plus a start command. It is immutable and versioned.

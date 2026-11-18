@@ -5,9 +5,9 @@
 - **Branch:** `m7-showcase` (from `main`, after PRs #5–#8 were merged)
 
 ## What we did
-1. **Asked whether to deploy at all, and decided not to.** Before writing any Kubernetes manifests, the owner asked whether deploying Flux to Megatron is worth it. The honest answer:
+1. **Asked whether to deploy at all, and decided not to.** Before writing any Kubernetes manifests, the owner asked whether deploying Flux to the home server is worth it. The honest answer:
    - **Nobody else could see it:** tailnet-only means only the owner's devices.
-   - **Public would be unwise:** a rate limiter with published dev keys, on a server shared with Slate.
+   - **Public would be unwise:** a rate limiter with published dev keys, on a server shared with another project.
    - **There's no frontend.**
    - **The repo's measured results are the real showcase.**
 

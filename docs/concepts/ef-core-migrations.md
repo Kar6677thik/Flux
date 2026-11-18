@@ -4,7 +4,7 @@
 > Code: [`Data/FluxDbContext.cs`](../../src/Flux.Gateway/Data/FluxDbContext.cs), [`Data/Migrations/`](../../src/Flux.Gateway/Data/Migrations/), [`Data/DatabaseStartup.cs`](../../src/Flux.Gateway/Data/DatabaseStartup.cs), [`Data/DesignTimeDbContextFactory.cs`](../../src/Flux.Gateway/Data/DesignTimeDbContextFactory.cs)
 
 ## Problem
-The schema has to exist, identically, on a laptop, in CI's throwaway containers and on Megatron, and it has to *change* over time without anyone running SQL by hand. "Which `ALTER TABLE`s has this database had?" must have a definite answer.
+The schema has to exist, identically, on a laptop, in CI's throwaway containers and on the home server, and it has to *change* over time without anyone running SQL by hand. "Which `ALTER TABLE`s has this database had?" must have a definite answer.
 
 ## Context
 Every service with a relational database has this problem. Tools: EF Core migrations (.NET), Flyway/Liquibase (JVM), Alembic (Python), Rails migrations. They all share one idea: **numbered change scripts plus a history table in the database**.
@@ -33,7 +33,7 @@ CONSTRAINT fk_merchants_plans_plan_id FOREIGN KEY (plan_id) REFERENCES plans (id
 |-------|-----|-----|
 | Laptop / Compose | `Database:MigrateOnStartup=true` (Development config) | Zero ceremony: `docker compose up` gives you a working schema |
 | Integration tests | `PostgresFixture` migrates once per test run | Dozens of gateway hosts migrating the same database in parallel would only test the migration lock |
-| Megatron (M7) | A **separate Job** (an EF *migration bundle*) before the rollout | 3 replicas migrating on startup would race, and the request-serving process would need DDL rights (§22.21, spec §17) |
+| Home server (M7) | A **separate Job** (an EF *migration bundle*) before the rollout | 3 replicas migrating on startup would race, and the request-serving process would need DDL rights (§22.21, spec §17) |
 
 ## Alternatives
 | Option | Trade-off |
